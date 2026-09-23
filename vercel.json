@@ -1,0 +1,17 @@
+{
+  "rewrites": [
+    {
+      "source": "/((?!sw.js|manifest.webmanifest|images/|icon-512.png|favicon.svg).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
+}

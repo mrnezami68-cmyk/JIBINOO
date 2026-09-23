@@ -1,0 +1,35 @@
+{
+  "name": "جیبینو — حسابدار شخصی هوشمند",
+  "short_name": "جیبینو",
+  "description": "حسابدار شخصی هوشمند: دارایی، وام، اهداف مالی، سرمایه‌گذاری، قیمت لحظه‌ای طلا و رمزارز و تحلیل رفتار مالی.",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#f4f2ec",
+  "theme_color": "#17795c",
+  "categories": ["finance", "productivity", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
