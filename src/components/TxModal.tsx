@@ -32,7 +32,7 @@ const INVESTMENT_TYPES = [
 ];
 
 export function TxModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { addTx, goals, loans, cash, settings } = useStore();
+  const { addTx, transferGoal, payLoan, goals, loans, cash, settings } = useStore();
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
@@ -67,38 +67,43 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
       return;
     }
 
-    const fallbackTitles: Record<string, string> = {
-      income: incomeKind === 'fixed' ? 'درآمد ثابت ماهانه' : 'درآمد متغیر',
-      expense: EXPENSE_CATEGORIES.find((c) => c.key === category)?.label ?? 'هزینه',
-      investment: 'خرید دارایی',
-      goal: goals.find((g) => g.id === goalId)?.title ?? 'انتقال به هدف',
-      loan: `پرداخت قسط ${loans.find((l) => l.id === loanId)?.title ?? ''}`.trim(),
-    };
-
-    addTx({
-      type: type as never,
-      kind:
-        type === 'income'
-          ? incomeKind
-          : type === 'investment'
-            ? investType
-            : type === 'goal'
-              ? 'deposit'
-              : type === 'loan'
-                ? 'payment'
-                : category,
-      category:
-        type === 'income' ? source : type === 'expense' ? category : type === 'investment' ? investType : type,
-      title: title.trim() || fallbackTitles[type],
-      amount: value,
-      date,
-      note: note.trim() || undefined,
-    });
-
-    if (type === 'goal' && goalId) {
-      // goal transfer is recorded in the ledger via addTx + goal transfer history
-      // handled by store's goal transfer action when invoked from Goals page;
-      // here we only record the ledger entry to keep the modal generic.
+    if (type === 'goal') {
+      if (!goalId) {
+        setError('ابتدا یک هدف مالی بسازید تا انتقال به آن ثبت شود.');
+        return;
+      }
+      // اتمیک: جابه‌جایی نقد + ثبت در تاریخچه هدف + سند دفتر (باگ شماره ۲)
+      transferGoal(goalId, value, 'deposit', {
+        date,
+        title: title.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+    } else if (type === 'loan') {
+      if (!loanId) {
+        setError('ابتدا یک وام ثبت کنید تا پرداخت قسط برای آن ثبت شود.');
+        return;
+      }
+      // اتمیک: کسر نقد + ثبت در اقساط وام + سند دفتر (باگ شماره ۳)
+      payLoan(loanId, value, date, {
+        title: title.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+    } else {
+      const fallbackTitles: Record<string, string> = {
+        income: incomeKind === 'fixed' ? 'درآمد ثابت ماهانه' : 'درآمد متغیر',
+        expense: EXPENSE_CATEGORIES.find((c) => c.key === category)?.label ?? 'هزینه',
+        investment: 'خرید دارایی',
+      };
+      addTx({
+        type: type as never,
+        kind: type === 'income' ? incomeKind : type === 'investment' ? investType : category,
+        category:
+          type === 'income' ? source : type === 'expense' ? category : investType,
+        title: title.trim() || fallbackTitles[type],
+        amount: value,
+        date,
+        note: note.trim() || undefined,
+      });
     }
 
     reset();

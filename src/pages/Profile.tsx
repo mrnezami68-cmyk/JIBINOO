@@ -29,13 +29,12 @@ import {
   scorePersonalityTest,
   bandLabel,
 } from '../lib/tests';
-import { fmt, compact, pct, faDigits, freshness, parseAmount, todayISO, jDateLabel } from '../lib/format';
+import { fmt, compact, pct, faDigits, freshness, parseAmount, jDateLabel } from '../lib/format';
 import {
   SectionHeader,
   Modal,
   Field,
   Banner,
-  StatCard,
   LikertScale,
   ConfirmDialog,
 } from '../components/ui';

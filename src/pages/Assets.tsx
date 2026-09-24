@@ -6,16 +6,15 @@ import {
   TrendingDown,
   RefreshCw,
   Trash2,
-  Pencil,
   Wallet,
   Info,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { valueAssets, computeNetWorth, investmentByType } from '../lib/analysis';
-import { fmt, compact, pct, faDigits, freshness, parseAmount, todayISO } from '../lib/format';
+import { fmt, compact, pct, freshness, parseAmount } from '../lib/format';
 import { priceForAsset } from '../lib/prices';
-import { SectionHeader, Modal, Field, AmountInput, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard } from '../components/ui';
-import { Donut, Progress, Ring } from '../components/charts';
+import { SectionHeader, Modal, Field, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard } from '../components/ui';
+import { Donut, Progress } from '../components/charts';
 
 const KIND_OPTIONS = [
   { key: 'gold', label: 'طلا و سکه' },
@@ -49,7 +48,7 @@ const SYMBOL_PRESETS: Record<string, { symbol: string; name: string; unit: strin
 
 export function Assets() {
   const store = useStore();
-  const { assets, prices, addAsset, deleteAsset, sellAsset, updateAsset, refreshPrices, refreshing, cash } = store;
+  const { assets, prices, addAsset, deleteAsset, sellAsset, refreshPrices, refreshing, cash } = store;
   const [addOpen, setAddOpen] = useState(false);
   const [sellId, setSellId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -298,7 +297,7 @@ export function Assets() {
       <ConfirmDialog
         open={!!deleteId}
         title="حذف دارایی"
-        message="این دارایی از فهرست شما حذف می‌شود (تراکنش‌های دفتر دست‌نخورده باقی می‌مانند). ادامه می‌دهید؟"
+        message="این دارایی به‌همراه تراکنش‌های خرید/فروش مرتبط آن حذف و اثر نقدی برگردانده می‌شود تا تراز بماند. ادامه می‌دهید؟"
         confirmLabel="حذف شود"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
@@ -317,17 +316,20 @@ function AddAssetModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onAdd: (a: {
-    kind: 'gold' | 'currency' | 'crypto' | 'other';
-    name: string;
-    symbol: string;
-    unit: string;
-    quantity: number;
-    avgBuy: number;
-    note?: string;
-  }) => void;
+  onAdd: (
+    a: {
+      kind: 'gold' | 'currency' | 'crypto' | 'other';
+      name: string;
+      symbol: string;
+      unit: string;
+      quantity: number;
+      avgBuy: number;
+      note?: string;
+    },
+    opts?: { fromCash?: boolean }
+  ) => void;
 }) {
-  const { prices, cash, addTx } = useStore();
+  const { prices, cash } = useStore();
   const [kind, setKind] = useState('gold');
   const [preset, setPreset] = useState('GOLD18');
   const [name, setName] = useState('طلای ۱۸ عیار');
@@ -357,26 +359,19 @@ function AddAssetModal({
       setError(`مجموع خرید (${fmt(total)} تومان) از موجودی نقد بیشتر است.`);
       return;
     }
-    onAdd({
-      kind: kind as never,
-      name: name || selected?.name || 'دارایی',
-      symbol: selected?.symbol ?? 'OTHER',
-      unit: selected?.unit ?? 'واحد',
-      quantity: q,
-      avgBuy: avg,
-      note: note.trim() || undefined,
-    });
-    if (fromCash) {
-      addTx({
-        type: 'investment',
-        kind,
-        category: kind,
-        title: `خرید ${name || selected?.name}`,
-        amount: total,
-        date: todayISO(),
+    // اتمیک داخل store: ثبت دارایی + کسر نقد + سند خریدِ پیوندخورده (باگ شماره ۷)
+    onAdd(
+      {
+        kind: kind as never,
+        name: name || selected?.name || 'دارایی',
+        symbol: selected?.symbol ?? 'OTHER',
+        unit: selected?.unit ?? 'واحد',
+        quantity: q,
+        avgBuy: avg,
         note: note.trim() || undefined,
-      });
-    }
+      },
+      { fromCash }
+    );
     setQty('');
     setAvgBuy('');
     setNote('');

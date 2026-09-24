@@ -165,7 +165,7 @@ function InstallPWA({ variant = 'rail' }: { variant?: 'rail' | 'icon' }) {
 
 export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { settings, prices, refreshPrices, refreshing } = useStore();
+  const { prices, refreshPrices, refreshing } = useStore();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
