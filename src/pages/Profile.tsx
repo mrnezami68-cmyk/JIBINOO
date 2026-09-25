@@ -734,7 +734,7 @@ export function Profile() {
               <div className="flex items-center justify-between rounded-[11px] border border-line bg-white/70 px-3 py-2">
                 <span className="text-[8.5px] font-bold text-ink-2">نسخه اپلیکیشن</span>
                 <span className="num text-[9.5px] font-extrabold text-ink">
-                  ۲.۱ — پشتیبان‌گیری و اصلاح قیمت‌ها (PWA)
+                  ۲.۲ — حساب‌های بانکی (PWA)
                 </span>
               </div>
 

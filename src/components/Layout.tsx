@@ -8,6 +8,7 @@ import {
   BarChart3,
   Target,
   Landmark,
+  CreditCard,
   User,
   Download,
   Sparkles,
@@ -18,6 +19,7 @@ import { freshness, timeLabel, fmt, compact } from '../lib/format';
 const NAV = [
   { to: '/', label: 'خانه', icon: LayoutDashboard, end: true },
   { to: '/transactions', label: 'تراکنش‌ها', icon: Receipt },
+  { to: '/accounts', label: 'حساب‌ها', icon: CreditCard },
   { to: '/assets', label: 'دارایی‌ها', icon: Wallet },
   { to: '/reports', label: 'گزارش‌ها', icon: BarChart3 },
   { to: '/goals', label: 'اهداف', icon: Target },

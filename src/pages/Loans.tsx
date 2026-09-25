@@ -12,6 +12,7 @@ import {
   ConfirmDialog,
   StatCard,
 } from '../components/ui';
+import { AccountPicker } from '../components/AccountPicker';
 import { Progress, Ring } from '../components/charts';
 
 export function Loans() {
@@ -217,9 +218,9 @@ export function Loans() {
       <PayModal
         loanId={payId}
         onClose={() => setPayId(null)}
-        onPay={(amount, date) => {
-          // اتمیک داخل store: کسر نقد دقیقاً یک بار + ثبت در اقساط + سند دفتر (باگ شماره ۱)
-          if (payId) payLoan(payId, amount, date);
+        onPay={(amount, date, accountId) => {
+          // اتمیک داخل store: کسر از حساب دقیقاً یک بار + ثبت در اقساط + سند دفتر (باگ شماره ۱)
+          if (payId) payLoan(payId, amount, date, { accountId });
           setPayId(null);
         }}
       />
@@ -255,10 +256,11 @@ function AddLoanModal({
       installmentsTotal: number;
       dueDay: number;
     },
-    opts?: { receiveCash?: boolean }
+    opts?: { receiveCash?: boolean; accountId?: string }
   ) => void;
 }) {
-  const { cash } = useStore();
+  const { cash, accounts } = useStore();
+  const activeAccounts = accounts.filter((a) => !a.archived);
   const [title, setTitle] = useState('');
   const [lender, setLender] = useState('');
   const [total, setTotal] = useState('');
@@ -268,6 +270,7 @@ function AddLoanModal({
   // فاز ۱۳: وام «قدیمی» (بازچینی اطلاعات قبلی — پولش خرج شده) پیش‌فرض است تا
   // موجودی نقد به‌اشتباه باد نکند؛ فقط وام «جدید» به نقد واریز می‌شود.
   const [loanStatus, setLoanStatus] = useState<'old' | 'new'>('old');
+  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
@@ -287,6 +290,17 @@ function AddLoanModal({
       setError('مبلغ کل، مبلغ قسط و تعداد اقساط را کامل وارد کنید.');
       return;
     }
+    // فاز ۱۵: وام جدید → واریز اصل به یک حساب مشخص (انتخاب الزامی)
+    if (loanStatus === 'new') {
+      if (activeAccounts.length === 0) {
+        setError('برای واریز اصل وام، ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
+        return;
+      }
+      if (!accountId) {
+        setError('حسابی که اصل وام به آن واریز می‌شود را انتخاب کنید.');
+        return;
+      }
+    }
     onAdd(
       {
         title: title.trim(),
@@ -298,7 +312,7 @@ function AddLoanModal({
       },
       // باگ شماره ۶: دریافت نقدی اصل وام + سند «دریافت وام» در دفتر —
       // فقط وقتی کاربر صراحتاً «وام جدید» را انتخاب کرده باشد
-      { receiveCash: loanStatus === 'new' }
+      { receiveCash: loanStatus === 'new', accountId }
     );
     setTitle('');
     setLender('');
@@ -415,6 +429,17 @@ function AddLoanModal({
             پرداخت اقساطش هستید ثبت می‌کنید، گزینه «قدیمی» را بگذارید.
           </div>
         </div>
+        {/* فاز ۱۵ — حساب مقصد اصل وام (فقط برای وام جدید) */}
+        {loanStatus === 'new' && (
+          <AccountPicker
+            value={accountId}
+            onChange={(id) => {
+              setAccountId(id);
+              setError('');
+            }}
+            label="اصل وام به کدام حساب واریز شود؟"
+          />
+        )}
         {(parseAmount(total) > 0 || parseAmount(count) > 0) && (
           <div className="flex items-center justify-between rounded-[14px] border border-brand-soft-2 bg-brand-soft/50 px-4 py-3">
             <div className="flex items-center gap-2 text-[10px] font-bold text-brand-2">
@@ -442,20 +467,24 @@ function PayModal({
 }: {
   loanId: string | null;
   onClose: () => void;
-  onPay: (amount: number, date: string) => void;
+  onPay: (amount: number, date: string, accountId: string) => void;
 }) {
-  const { loans, cash } = useStore();
+  const { loans, accounts } = useStore();
+  const activeAccounts = accounts.filter((a) => !a.archived);
   const loan = loans.find((l) => l.id === loanId);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayISO());
+  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
+
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
   return (
     <Modal
       open={!!loanId}
       onClose={onClose}
       title={`پرداخت قسط «${loan?.title ?? ''}»`}
-      subtitle="مبلغ پرداختی از موجودی نقد کم و در دفتر تراکنش‌ها ثبت می‌شود."
+      subtitle="مبلغ پرداختی از حسابی که انتخاب می‌کنید کسر و در دفتر تراکنش‌ها ثبت می‌شود."
       size="sm"
       footer={
         loan ? (
@@ -468,11 +497,21 @@ function PayModal({
                   setError('مبلغ پرداختی را وارد کنید.');
                   return;
                 }
-                if (v > cash) {
-                  setError(`مبلغ از موجودی نقد (${fmt(cash)} تومان) بیشتر است.`);
+                if (activeAccounts.length === 0) {
+                  setError('هنوز حسابی ندارید؛ ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
                   return;
                 }
-                onPay(v, date);
+                if (!selectedAccount) {
+                  setError('حسابی که قسط از آن پرداخت می‌شود را انتخاب کنید.');
+                  return;
+                }
+                if (v > selectedAccount.balance) {
+                  setError(
+                    `موجودی حساب «${selectedAccount.name}» کافی نیست (${fmt(selectedAccount.balance)} تومان).`
+                  );
+                  return;
+                }
+                onPay(v, date, accountId);
                 setAmount('');
                 setError('');
               }}
@@ -490,8 +529,23 @@ function PayModal({
         <div className="space-y-4">
           <div className="rounded-[15px] border border-line bg-paper/50 p-4 text-[10.5px] font-semibold text-ink-2">
             مبلغ هر قسط: <span className="num font-extrabold">{fmt(loan.installmentAmount)}</span>{' '}
-            تومان • موجودی نقد: <span className="num font-extrabold">{fmt(cash)}</span> تومان
+            تومان
+            {selectedAccount && (
+              <>
+                {' '}• موجودی «{selectedAccount.name}»:{' '}
+                <span className="num font-extrabold">{fmt(selectedAccount.balance)}</span> تومان
+              </>
+            )}
           </div>
+          {/* فاز ۱۵ — حساب مبدأ قسط (الزامی) */}
+          <AccountPicker
+            value={accountId}
+            onChange={(id) => {
+              setAccountId(id);
+              setError('');
+            }}
+            label="قسط از کدام حساب پرداخت می‌شود؟"
+          />
           <Field label="مبلغ پرداختی" hint="تومان">
             <AmountInput
               value={amount}

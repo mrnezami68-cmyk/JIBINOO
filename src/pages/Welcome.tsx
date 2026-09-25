@@ -24,10 +24,10 @@ const FEATURES = [
 ];
 
 export function Welcome() {
-  const { settings, updateSettings, setCash, cash, state } = useStore();
+  const { settings, updateSettings, setCash, cash } = useStore();
   const [step, setStep] = useState(0);
   const [name, setName] = useState(settings.name ?? '');
-  const [initialCash, setInitialCash] = useState(settings.name ? String(state.cash || '') : '');
+  const [initialCash, setInitialCash] = useState(settings.name ? String(cash || '') : '');
   const [fixedIncome, setFixedIncome] = useState(
     settings.monthlyFixedIncome ? String(settings.monthlyFixedIncome) : ''
   );
@@ -374,7 +374,7 @@ export function Welcome() {
                         setCash(
                           initialCash.trim()
                             ? Math.max(0, parseAmount(initialCash))
-                            : Math.max(0, state.cash || 0)
+                            : Math.max(0, cash || 0)
                         );
                         updateSettings({
                           name: name.trim(),

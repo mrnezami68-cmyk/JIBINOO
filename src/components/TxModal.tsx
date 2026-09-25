@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Gem, ArrowDownLeft, ArrowUpLeft, Target, Landmark, Wallet } from 'lucide-react';
 import { Modal, Field, AmountInput, ChipSelect, Banner } from './ui';
+import { AccountPicker } from './AccountPicker';
 import { useStore } from '../lib/store';
 import { parseAmount, todayISO, fmt } from '../lib/format';
 import { EXPENSE_CATEGORIES } from '../lib/analysis';
@@ -32,7 +33,7 @@ const INVESTMENT_TYPES = [
 ];
 
 export function TxModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { addTx, transferGoal, payLoan, goals, loans, cash, settings } = useStore();
+  const { addTx, transferGoal, payLoan, goals, loans, cash, accounts, settings } = useStore();
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
@@ -44,7 +45,11 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
   const [loanId, setLoanId] = useState(loans[0]?.id ?? '');
   const [date, setDate] = useState(todayISO());
   const [note, setNote] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
+
+  const activeAccounts = accounts.filter((a) => !a.archived);
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
   const reset = () => {
     setAmount('');
@@ -59,11 +64,27 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
       setError('مبلغ را وارد کنید.');
       return;
     }
+    // فاز ۱۵ تصمیم ۲: انتخاب حساب همیشه الزامی است (تک‌حسابه‌ها خودکار انتخاب می‌شوند)
+    if (activeAccounts.length === 0) {
+      setError('هنوز حسابی ندارید؛ ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
+      return;
+    }
+    if (!accountId || !selectedAccount) {
+      setError('حساب موردنظر این تراکنش را انتخاب کنید.');
+      return;
+    }
+    // تصمیم ۲ ریسک ۲: اعتبارسنجی روی موجودی «همان حساب»، نه نقد کل
     if (
       (type === 'expense' || type === 'investment' || type === 'goal' || type === 'loan') &&
-      value > cash
+      value > selectedAccount.balance
     ) {
-      setError(`مبلغ از موجودی نقد فعلی (${fmt(cash)} تومان) بیشتر است.`);
+      const others = activeAccounts.filter((a) => a.id !== accountId && a.balance >= value);
+      setError(
+        `موجودی حساب «${selectedAccount.name}» کافی نیست (${fmt(selectedAccount.balance)} تومان).` +
+          (others.length
+            ? ` می‌توانید ابتدا از «${others[0].name}» به این حساب پول منتقل کنید.`
+            : '')
+      );
       return;
     }
 
@@ -77,6 +98,7 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
         date,
         title: title.trim() || undefined,
         note: note.trim() || undefined,
+        accountId,
       });
     } else if (type === 'loan') {
       if (!loanId) {
@@ -87,6 +109,7 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
       payLoan(loanId, value, date, {
         title: title.trim() || undefined,
         note: note.trim() || undefined,
+        accountId,
       });
     } else {
       const fallbackTitles: Record<string, string> = {
@@ -103,6 +126,7 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
         amount: value,
         date,
         note: note.trim() || undefined,
+        accountId,
       });
     }
 
@@ -140,6 +164,21 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
             columns={5}
           />
         </div>
+
+        {/* فاز ۱۵ — انتخاب حساب (الزامی؛ تصمیم ۲) */}
+        <AccountPicker
+          value={accountId}
+          onChange={(id) => {
+            setAccountId(id);
+            setError('');
+          }}
+          label={
+            type === 'income'
+              ? 'به کدام حساب واریز می‌شود؟'
+              : 'از کدام حساب پرداخت می‌شود؟'
+          }
+          error={!accountId && !!error}
+        />
 
         <Field label="مبلغ" hint="تومان">
           <AmountInput value={amount} onChange={(v) => { setAmount(v); setError(''); }} />
@@ -292,9 +331,13 @@ export function TxModal({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="flex items-center gap-2.5 rounded-[15px] bg-paper px-4 py-3">
           <Wallet size={16} className="text-brand-2" />
           <div className="text-[10.5px] font-semibold leading-5 text-ink-2">
-            {type === 'income'
-              ? `بعد از ثبت، موجودی نقد شما ${fmt(cash + parseAmount(amount))} تومان می‌شود.`
-              : `بعد از ثبت، موجودی نقد شما ${fmt(Math.max(0, cash - parseAmount(amount)))} تومان می‌شود.`}
+            {selectedAccount
+              ? type === 'income'
+                ? `بعد از ثبت، موجودی «${selectedAccount.name}» برابر ${fmt(selectedAccount.balance + parseAmount(amount))} تومان می‌شود.`
+                : `بعد از ثبت، موجودی «${selectedAccount.name}» برابر ${fmt(Math.max(0, selectedAccount.balance - parseAmount(amount)))} تومان می‌شود.`
+              : type === 'income'
+                ? `بعد از ثبت، موجودی نقد شما ${fmt(cash + parseAmount(amount))} تومان می‌شود.`
+                : `بعد از ثبت، موجودی نقد شما ${fmt(Math.max(0, cash - parseAmount(amount)))} تومان می‌شود.`}
             {settings.pinEnabled && ' داده‌ها فقط روی دستگاه شما ذخیره می‌شود.'}
           </div>
         </div>

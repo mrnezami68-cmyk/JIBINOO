@@ -15,6 +15,7 @@ const TYPE_FILTERS = [
   { key: 'investment', label: 'سرمایه‌گذاری' },
   { key: 'goal', label: 'اهداف' },
   { key: 'loan', label: 'اقساط' },
+  { key: 'transfer', label: 'انتقال بین حساب‌ها' },
 ];
 
 const PERIODS = [
@@ -26,12 +27,13 @@ const PERIODS = [
 ];
 
 export function Transactions() {
-  const { txs, deleteTx, cash } = useStore();
+  const { txs, deleteTx, cash, accounts } = useStore();
   const [txOpen, setTxOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [period, setPeriod] = useState('month');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [accountFilter, setAccountFilter] = useState('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const range = useMemo(() => {
@@ -44,6 +46,17 @@ export function Transactions() {
     return txs.filter((t) => {
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
       if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
+      if (accountFilter !== 'all') {
+        // فاز ۱۵ — فیلتر حساب: سند انتقال با مبدأ یا مقصد تطبیق می‌خورد؛
+        // «legacy» = اسناد قدیمی بدون حساب (پیش از فاز ۱۵)
+        if (accountFilter === 'legacy') {
+          if (t.accountId) return false;
+        } else {
+          const matchesFrom = t.accountId === accountFilter;
+          const matchesTo = t.link?.type === 'account-transfer' && t.link.toId === accountFilter;
+          if (!matchesFrom && !matchesTo) return false;
+        }
+      }
       if (range.from && t.date < range.from) return false;
       if (range.to && t.date > range.to) return false;
       if (query.trim()) {
@@ -56,7 +69,7 @@ export function Transactions() {
       }
       return true;
     });
-  }, [txs, typeFilter, categoryFilter, range, query]);
+  }, [txs, typeFilter, categoryFilter, accountFilter, range, query]);
 
   const summary = useMemo(
     () => summarize(filtered),
@@ -139,6 +152,26 @@ export function Transactions() {
               {t.label}
             </button>
           ))}
+          {/* فاز ۱۵ — فیلتر بر اساس حساب */}
+          {accounts.length > 0 && (
+            <>
+              <span className="mx-1 h-4 w-px bg-line" />
+              <select
+                className="input !w-auto !py-1.5 !text-[10px] !font-bold"
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
+                title="فیلتر بر اساس حساب"
+              >
+                <option value="all">همه حساب‌ها</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}{a.archived ? ' (آرشیو)' : ''}
+                  </option>
+                ))}
+                <option value="legacy">بدون حساب (قدیمی)</option>
+              </select>
+            </>
+          )}
         </div>
 
         {typeFilter === 'expense' && (
