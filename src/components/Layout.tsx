@@ -47,7 +47,7 @@ function Logo({ compactMode = false }: { compactMode?: boolean }) {
 
 function PriceTicker() {
   const { prices, refreshPrices, refreshing } = useStore();
-  const items = ['usd', 'gold18', 'bitcoin', 'ethereum']
+  const items = ['usd', 'gold18', 'abshode', 'coin_emami']
     .map((k) => prices.items[k])
     .filter(Boolean);
 
@@ -165,18 +165,11 @@ function InstallPWA({ variant = 'rail' }: { variant?: 'rail' | 'icon' }) {
 
 export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { settings, prices, refreshPrices, refreshing } = useStore();
+  const { prices, refreshPrices, refreshing } = useStore();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [location.pathname]);
-
-  // periodic price refresh (every 5 minutes)
-  useEffect(() => {
-    const id = window.setInterval(() => void refreshPrices(), 5 * 60 * 1000);
-    return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <div className="min-h-screen bg-paper">

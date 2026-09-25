@@ -5,7 +5,6 @@ import {
   Code2,
   FolderTree,
   Terminal,
-  Shield,
   ShieldCheck,
   ShieldAlert,
   TrendingUp,

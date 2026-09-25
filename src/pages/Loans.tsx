@@ -15,7 +15,7 @@ import {
 import { Progress, Ring } from '../components/charts';
 
 export function Loans() {
-  const { loans, addLoan, payLoan, deleteLoan, cash, addTx, txs } = useStore();
+  const { loans, addLoan, payLoan, deleteLoan, cash } = useStore();
   const [addOpen, setAddOpen] = useState(false);
   const [payId, setPayId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -218,18 +218,8 @@ export function Loans() {
         loanId={payId}
         onClose={() => setPayId(null)}
         onPay={(amount, date) => {
-          if (payId) {
-            payLoan(payId, amount, date);
-            const loan = loans.find((l) => l.id === payId);
-            addTx({
-              type: 'loan',
-              kind: 'payment',
-              category: 'loan',
-              title: `پرداخت قسط «${loan?.title ?? 'وام'}»`,
-              amount,
-              date,
-            });
-          }
+          // اتمیک داخل store: کسر نقد دقیقاً یک بار + ثبت در اقساط + سند دفتر (باگ شماره ۱)
+          if (payId) payLoan(payId, amount, date);
           setPayId(null);
         }}
       />
@@ -237,7 +227,7 @@ export function Loans() {
       <ConfirmDialog
         open={!!deleteId}
         title="حذف وام"
-        message="این وام حذف می‌شود؛ پرداخت‌های ثبت‌شده در دفتر تراکنش‌ها باقی می‌مانند. ادامه می‌دهید؟"
+        message="این وام به‌همراه اسناد مرتبط آن (دریافت وام و اقساط پرداختی) از دفتر تراکنش‌ها حذف و اثر نقدی آن‌ها برگردانده می‌شود تا تراز بماند. ادامه می‌دهید؟"
         confirmLabel="حذف شود"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
@@ -256,21 +246,26 @@ function AddLoanModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onAdd: (loan: {
-    title: string;
-    lender?: string;
-    total: number;
-    installmentAmount: number;
-    installmentsTotal: number;
-    dueDay: number;
-  }) => void;
+  onAdd: (
+    loan: {
+      title: string;
+      lender?: string;
+      total: number;
+      installmentAmount: number;
+      installmentsTotal: number;
+      dueDay: number;
+    },
+    opts?: { receiveCash?: boolean }
+  ) => void;
 }) {
+  const { cash } = useStore();
   const [title, setTitle] = useState('');
   const [lender, setLender] = useState('');
   const [total, setTotal] = useState('');
   const [installment, setInstallment] = useState('');
   const [count, setCount] = useState('');
   const [dueDay, setDueDay] = useState('1');
+  const [receiveCash, setReceiveCash] = useState(true);
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
@@ -290,14 +285,18 @@ function AddLoanModal({
       setError('مبلغ کل، مبلغ قسط و تعداد اقساط را کامل وارد کنید.');
       return;
     }
-    onAdd({
-      title: title.trim(),
-      lender: lender.trim() || undefined,
-      total: t,
-      installmentAmount: i,
-      installmentsTotal: c,
-      dueDay: Math.min(31, Math.max(1, d)),
-    });
+    onAdd(
+      {
+        title: title.trim(),
+        lender: lender.trim() || undefined,
+        total: t,
+        installmentAmount: i,
+        installmentsTotal: c,
+        dueDay: Math.min(31, Math.max(1, d)),
+      },
+      // باگ شماره ۶: دریافت نقدی اصل وام + سند «دریافت وام» در دفتر
+      { receiveCash }
+    );
     setTitle('');
     setLender('');
     setTotal('');
@@ -374,6 +373,23 @@ function AddLoanModal({
             />
           </Field>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-[15px] border border-line bg-paper/50 p-4">
+          <input
+            type="checkbox"
+            checked={receiveCash}
+            onChange={(e) => setReceiveCash(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-[#0e5744]"
+          />
+          <div>
+            <div className="text-[11px] font-bold text-ink-2">
+              مبلغ وام به موجودی نقد واریز شود
+            </div>
+            <div className="mt-1 text-[9.5px] font-medium leading-5 text-ink-3">
+              موجودی نقد فعلی: {fmt(cash)} تومان — سند «دریافت وام» در دفتر تراکنش‌ها ثبت
+              می‌شود تا ارزش خالص دارایی درست بماند.
+            </div>
+          </div>
+        </label>
         {(parseAmount(total) > 0 || parseAmount(count) > 0) && (
           <div className="flex items-center justify-between rounded-[14px] border border-brand-soft-2 bg-brand-soft/50 px-4 py-3">
             <div className="flex items-center gap-2 text-[10px] font-bold text-brand-2">

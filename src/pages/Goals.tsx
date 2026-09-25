@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
-import { fmt, compact, pct, faDigits, parseAmount, todayISO, jDateLabel } from '../lib/format';
+import { fmt, compact, pct, faDigits, parseAmount, jDateLabel } from '../lib/format';
 import {
   SectionHeader,
   Modal,
@@ -237,7 +237,7 @@ export function Goals() {
       <ConfirmDialog
         open={!!deleteId}
         title="حذف هدف"
-        message="این هدف و تاریخچه انتقال‌های آن حذف می‌شود (تراکنش‌های دفتر دست‌نخورده باقی می‌مانند). ادامه می‌دهید؟"
+        message="این هدف، تاریخچه انتقال‌ها و تراکنش‌های مرتبط آن حذف و اثر نقدی برگردانده می‌شود تا تراز بماند. ادامه می‌دهید؟"
         confirmLabel="حذف شود"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {

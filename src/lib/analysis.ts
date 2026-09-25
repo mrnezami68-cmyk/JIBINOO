@@ -74,7 +74,8 @@ export function computeNetWorth(state: AppState, prices: PriceState): NetWorth {
     pnlPct: investedCost > 0 ? (investments - investedCost) / investedCost : 0,
     byClass: [
       { key: 'cash', label: 'نقد', value: state.cash, color: '#2f9c78' },
-      { key: 'gold', label: 'طلا', value: classValue('gold'), color: '#c08d2c' },
+      { key: 'gold', label: 'طلا و سکه', value: classValue('gold'), color: '#c08d2c' },
+      { key: 'metal', label: 'فلزات', value: classValue('metal'), color: '#6f8390' },
       { key: 'currency', label: 'ارز', value: classValue('currency'), color: '#4a86b4' },
       { key: 'crypto', label: 'رمزارز', value: classValue('crypto'), color: '#7161c4' },
       { key: 'other', label: 'سایر', value: classValue('other'), color: '#9a8fb8' },
@@ -92,6 +93,8 @@ export interface PeriodSummary {
   goalDeposit: number;
   goalWithdraw: number;
   loanPaid: number;
+  /** اصل وام دریافتی در بازه (جذب نقدینگی — نه درآمد) */
+  loanReceived: number;
   assetSell: number;
   netFlow: number;
   savingsRate: number;
@@ -108,7 +111,9 @@ export function summarize(txs: Tx[], from?: string, to?: string): PeriodSummary 
   const expense = sum((t) => (t.type === 'expense' ? t.amount : 0));
   const investment = sum((t) => (t.type === 'investment' && t.kind !== 'sell' ? t.amount : 0));
   const goalDeposit = sum((t) => (t.type === 'goal' && t.kind === 'deposit' ? t.amount : 0));
-  const loanPaid = sum((t) => (t.type === 'loan' ? t.amount : 0));
+  // فقط اقساط پرداختی؛ «دریافت اصل وام» (principal) درآمد/هزینه نیست، جذب نقدینگی است
+  const loanPaid = sum((t) => (t.type === 'loan' && t.kind !== 'principal' ? t.amount : 0));
+  const loanReceived = sum((t) => (t.type === 'loan' && t.kind === 'principal' ? t.amount : 0));
   const assetSell = sum((t) => (t.type === 'investment' && t.kind === 'sell' ? t.amount : 0));
   const goalWithdraw = sum((t) => (t.type === 'goal' && t.kind === 'withdraw' ? t.amount : 0));
 
@@ -121,6 +126,7 @@ export function summarize(txs: Tx[], from?: string, to?: string): PeriodSummary 
     goalDeposit,
     goalWithdraw,
     loanPaid,
+    loanReceived,
     assetSell,
     // Investments & goal transfers are NOT expenses — they are allocation of cash.
     netFlow: income - expense,
@@ -237,6 +243,7 @@ export function investmentByType(assets: Asset[], prices: PriceState): CategoryS
   const map = new Map<string, { label: string; value: number; color: string }>();
   const meta: Record<string, { label: string; color: string }> = {
     gold: { label: 'طلا و سکه', color: '#c08d2c' },
+    metal: { label: 'فلزات (نقره/مس/پلاتین)', color: '#6f8390' },
     currency: { label: 'ارز', color: '#4a86b4' },
     crypto: { label: 'رمزارز', color: '#7161c4' },
     other: { label: 'سایر دارایی‌ها', color: '#9a8fb8' },

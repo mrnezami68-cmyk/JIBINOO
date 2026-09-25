@@ -7,7 +7,12 @@ export type TxType = 'income' | 'expense' | 'investment' | 'goal' | 'loan';
 export interface Tx {
   id: string;
   type: TxType;
-  /** income: fixed | variable ; investment: asset class ; goal: deposit | withdraw */
+  /**
+   * income: fixed | variable ;
+   * investment: asset class (buy) | sell ;
+   * goal: deposit | withdraw ;
+   * loan: payment (پرداخت قسط) | principal (دریافت اصل وام)
+   */
   kind: string;
   category: string;
   title: string;
@@ -15,9 +20,37 @@ export interface Tx {
   /** ISO yyyy-mm-dd */
   date: string;
   note?: string;
+  /**
+   * پیوند اختیاری با رکورد مرتبط (وام / هدف / دارایی).
+   * هر تراکنشی که اثر مشترک روی نقد و یک رکورد دارد باید این پیوند را داشته باشد
+   * تا هنگام حذف تراکنش، اثر آن روی رکورد مرتبط نیز به‌صورت اتمیک برگردد.
+   */
+  link?: TxLink;
 }
 
-export type AssetKind = 'gold' | 'currency' | 'crypto' | 'other';
+/** Snapshot of an asset lot — enough to restore it when a sell entry is undone. */
+export interface AssetSnapshot {
+  kind: AssetKind;
+  name: string;
+  symbol: string;
+  unit: string;
+  avgBuy: number;
+}
+
+export type TxLink =
+  | { type: 'loan-payment'; refId: string; subId: string }
+  | { type: 'loan-principal'; refId: string }
+  | { type: 'goal-transfer'; refId: string; subId: string }
+  | { type: 'asset-buy'; refId: string; qty: number; unitPrice: number }
+  | {
+      type: 'asset-sell';
+      refId: string;
+      qty: number;
+      unitPrice: number;
+      assetSnapshot: AssetSnapshot;
+    };
+
+export type AssetKind = 'gold' | 'currency' | 'crypto' | 'metal' | 'other';
 
 export interface Asset {
   id: string;
@@ -105,17 +138,39 @@ export interface TestsState {
 
 /* ---------------------------- live prices --------------------------- */
 
-export type PriceSource = 'coingecko' | 'live-rate' | 'manual' | 'fallback';
+export type PriceSource =
+  | 'tgju'
+  | 'bitpin'
+  | 'coingecko'
+  | 'metals'
+  | 'yahoo'
+  | 'erapi'
+  | 'live-rate'
+  | 'derived'
+  | 'manual'
+  | 'cache'
+  | 'fallback';
 
 export interface LivePrice {
   id: string;
   label: string;
   symbol: string;
+  /** واحد قیمت‌گذاری، مثلاً «گرم»، «مثقال»، «عدد»، «کیلوگرم» */
+  unit: string;
   usd: number | null;
   toman: number | null;
   change24h: number | null;
   source: PriceSource;
   spark: number[];
+}
+
+/** وضعیت سلامت هر منبع قیمت برای نمایش شفاف در UI */
+export interface SourceHealth {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail?: string;
+  at?: number;
 }
 
 export interface PriceState {
@@ -129,6 +184,7 @@ export interface PriceState {
   gold18Toman: number;
   gold18Source: PriceSource;
   items: Record<string, LivePrice>;
+  sources: SourceHealth[];
 }
 
 export interface AppState {

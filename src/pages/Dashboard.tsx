@@ -33,7 +33,7 @@ import { TxModal } from '../components/TxModal';
 
 export function Dashboard() {
   const store = useStore();
-  const { settings, cash, txs, prices, assets, loans, goals, refreshing, refreshPrices } = store;
+  const { settings, txs, prices, assets, loans, goals, refreshing, refreshPrices } = store;
   const [txOpen, setTxOpen] = useState(false);
 
   const nw = useMemo(() => computeNetWorth(store.state, prices), [store.state, prices]);
@@ -48,7 +48,7 @@ export function Dashboard() {
 
   const firstName = settings.name?.trim() ? settings.name.trim().split(' ')[0] : 'دوست جیبینو';
 
-  const priceCards = ['usd', 'gold18', 'bitcoin', 'ethereum', 'tether']
+  const priceCards = ['usd', 'gold18', 'abshode', 'coin_emami', 'bitcoin']
     .map((k) => prices.items[k])
     .filter(Boolean);
 
@@ -631,10 +631,10 @@ export function TxRow({
       sign: tx.kind === 'withdraw' ? '+' : '−',
     },
     loan: {
-      label: 'پرداخت قسط',
+      label: tx.kind === 'principal' ? 'دریافت وام' : 'پرداخت قسط',
       color: 'bg-sky-soft text-sky',
       icon: <Landmark size={13} />,
-      sign: '−',
+      sign: tx.kind === 'principal' ? '+' : '−',
     },
   };
   const m = meta[tx.type] ?? meta.expense;

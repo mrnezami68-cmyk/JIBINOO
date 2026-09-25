@@ -6,32 +6,56 @@ import {
   TrendingDown,
   RefreshCw,
   Trash2,
-  Pencil,
   Wallet,
   Info,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { valueAssets, computeNetWorth, investmentByType } from '../lib/analysis';
-import { fmt, compact, pct, faDigits, freshness, parseAmount, todayISO } from '../lib/format';
+import { fmt, compact, pct, freshness, parseAmount } from '../lib/format';
 import { priceForAsset } from '../lib/prices';
-import { SectionHeader, Modal, Field, AmountInput, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard } from '../components/ui';
-import { Donut, Progress, Ring } from '../components/charts';
+import { SectionHeader, Modal, Field, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard } from '../components/ui';
+import { Donut, Progress } from '../components/charts';
 
 const KIND_OPTIONS = [
   { key: 'gold', label: 'طلا و سکه' },
   { key: 'currency', label: 'ارز' },
   { key: 'crypto', label: 'رمزارز' },
+  { key: 'metal', label: 'فلزات' },
   { key: 'other', label: 'سایر' },
 ];
+
+/** برچسب و رنگ منبع قیمت در UI */
+const SRC_META: Record<string, { label: string; cls: string }> = {
+  tgju: { label: 'طلایار / TGJU', cls: 'bg-gold-soft text-gold' },
+  bitpin: { label: 'بیت‌پین', cls: 'bg-brand-soft text-brand-2' },
+  coingecko: { label: 'CoinGecko', cls: 'bg-violet-soft text-violet' },
+  metals: { label: 'Gold-API', cls: 'bg-sky-soft text-sky' },
+  yahoo: { label: 'COMEX', cls: 'bg-sky-soft text-sky' },
+  erapi: { label: 'نرخ رسمی', cls: 'bg-paper-2 text-ink-3' },
+  'live-rate': { label: 'نرخ رسمی', cls: 'bg-paper-2 text-ink-3' },
+  derived: { label: 'مشتق', cls: 'bg-coral-soft text-coral' },
+  manual: { label: 'دستی', cls: 'bg-gold-soft text-gold' },
+  cache: { label: 'کش', cls: 'bg-paper-2 text-ink-3' },
+  fallback: { label: 'آفلاین', cls: 'bg-paper-2 text-ink-3' },
+};
 
 const SYMBOL_PRESETS: Record<string, { symbol: string; name: string; unit: string }[]> = {
   gold: [
     { symbol: 'GOLD18', name: 'طلای ۱۸ عیار', unit: 'گرم' },
     { symbol: 'GOLD24', name: 'طلای ۲۴ عیار', unit: 'گرم' },
+    { symbol: 'ABSHODE', name: 'طلای آب‌شده', unit: 'مثقال' },
+    { symbol: 'IMAMI', name: 'سکه امامی', unit: 'عدد' },
+    { symbol: 'BAHAR', name: 'سکه بهار آزادی', unit: 'عدد' },
+    { symbol: 'NIM', name: 'نیم‌سکه', unit: 'عدد' },
+    { symbol: 'ROB', name: 'ربع‌سکه', unit: 'عدد' },
+    { symbol: 'GERMI', name: 'سکه گرمی', unit: 'عدد' },
     { symbol: 'OTHER', name: 'سکه / طلای دست‌ساز', unit: 'عدد' },
   ],
   currency: [
     { symbol: 'USD', name: 'دلار آمریکا', unit: 'دلار' },
+    { symbol: 'EUR', name: 'یورو', unit: 'یورو' },
+    { symbol: 'AED', name: 'درهم امارات', unit: 'درهم' },
+    { symbol: 'TRY', name: 'لیر ترکیه', unit: 'لیر' },
     { symbol: 'OTHER', name: 'سایر ارزها', unit: 'واحد' },
   ],
   crypto: [
@@ -40,7 +64,20 @@ const SYMBOL_PRESETS: Record<string, { symbol: string; name: string; unit: strin
     { symbol: 'USDT', name: 'تتر', unit: 'USDT' },
     { symbol: 'SOL', name: 'سولانا', unit: 'SOL' },
     { symbol: 'XRP', name: 'ریپل', unit: 'XRP' },
+    { symbol: 'DOGE', name: 'دوج‌کوین', unit: 'DOGE' },
+    { symbol: 'ADA', name: 'کاردانو', unit: 'ADA' },
+    { symbol: 'TRX', name: 'ترون', unit: 'TRX' },
+    { symbol: 'BNB', name: 'بایننس‌کوین', unit: 'BNB' },
+    { symbol: 'TON', name: 'تون‌کوین', unit: 'TON' },
+    { symbol: 'LINK', name: 'چین‌لینک', unit: 'LINK' },
+    { symbol: 'AVAX', name: 'آوالانچ', unit: 'AVAX' },
     { symbol: 'OTHER', name: 'سایر رمزارزها', unit: 'واحد' },
+  ],
+  metal: [
+    { symbol: 'SILVER', name: 'نقره', unit: 'گرم' },
+    { symbol: 'PLATIN', name: 'پلاتین', unit: 'گرم' },
+    { symbol: 'COPPER', name: 'مس', unit: 'کیلوگرم' },
+    { symbol: 'OTHER', name: 'فلز دیگر', unit: 'واحد' },
   ],
   other: [
     { symbol: 'OTHER', name: 'دارایی دیگر (ماشین، ملک، تجهیزات…)', unit: 'واحد' },
@@ -49,7 +86,7 @@ const SYMBOL_PRESETS: Record<string, { symbol: string; name: string; unit: strin
 
 export function Assets() {
   const store = useStore();
-  const { assets, prices, addAsset, deleteAsset, sellAsset, updateAsset, refreshPrices, refreshing, cash } = store;
+  const { assets, prices, addAsset, deleteAsset, sellAsset, refreshPrices, refreshing, cash } = store;
   const [addOpen, setAddOpen] = useState(false);
   const [sellId, setSellId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -138,54 +175,59 @@ export function Assets() {
 
         <div className="card p-5 sm:p-6">
           <h3 className="mb-1 text-[15px] font-extrabold text-ink">نرخ‌های مرجع امروز</h3>
-          <p className="mb-5 text-[11px] leading-6 text-ink-3">
-            قیمت رمزارز = قیمت دلاری × نرخ دلار. طلای ۱۸ عیار از اونس جهانی محاسبه می‌شود.
+          <p className="mb-4 text-[11px] leading-6 text-ink-3">
+            موتور چندمنبعه: طلایار/TGJU، بیت‌پین، CoinGecko، Gold-API و COMEX — با قیمت‌های
+            مشتق و کش آخرین قیمت واقعی.
           </p>
-          <div className="space-y-2.5">
-            {[
-              { label: 'دلار (نرخ مرجع)', v: prices.usdToman, src: prices.usdTomanSource },
-              { label: 'طلای ۱۸ عیار (گرم)', v: prices.gold18Toman, src: prices.gold18Source },
-              { label: 'بیت‌کوین', v: prices.items.bitcoin?.toman ?? null, src: 'coingecko' },
-              { label: 'اتریوم', v: prices.items.ethereum?.toman ?? null, src: 'coingecko' },
-              { label: 'تتر', v: prices.items.tether?.toman ?? null, src: 'coingecko' },
-            ].map((r) => (
-              <div
-                key={r.label}
-                className="flex items-center justify-between rounded-[14px] border border-line bg-paper/50 px-4 py-3"
+
+          {/* سلامت منابع */}
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {prices.sources.map((s) => (
+              <span
+                key={s.id}
+                title={s.detail ?? ''}
+                className={`rounded-full px-2.5 py-1 text-[8.5px] font-bold ${
+                  s.ok ? 'bg-brand-soft text-brand-2' : 'bg-paper-2 text-ink-3'
+                }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="h-2 w-2 rounded-full bg-brand-3" />
-                  <span className="text-[11px] font-bold text-ink-2">{r.label}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[8px] font-bold ${
-                      r.src === 'coingecko'
-                        ? 'bg-violet-soft text-violet'
-                        : r.src === 'manual'
-                          ? 'bg-gold-soft text-gold'
-                          : r.src === 'fallback'
-                            ? 'bg-paper-2 text-ink-3'
-                            : 'bg-brand-soft text-brand-2'
-                    }`}
-                  >
-                    {r.src === 'coingecko'
-                      ? 'CoinGecko'
-                      : r.src === 'manual'
-                        ? 'دستی'
-                        : r.src === 'fallback'
-                          ? 'آفلاین'
-                          : 'زنده'}
-                  </span>
-                </div>
-                <div className="num text-[12px] font-extrabold text-ink">
-                  {r.v ? fmt(Math.round(r.v)) : '—'}
-                </div>
-              </div>
+                {s.ok ? '✓' : '✕'} {s.label}
+              </span>
             ))}
+          </div>
+
+          <div className="space-y-2.5">
+            {['usd', 'gold18', 'gold24', 'abshode', 'coin_emami', 'coin_nim', 'coin_rob', 'silver', 'copper', 'bitcoin']
+              .map((id) => prices.items[id])
+              .filter(Boolean)
+              .map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-[14px] border border-line bg-paper/50 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-2 w-2 rounded-full bg-brand-3" />
+                    <span className="text-[11px] font-bold text-ink-2">{p.label}</span>
+                    <span className="text-[8.5px] font-bold text-ink-3">{p.unit}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[8px] font-bold ${
+                        SRC_META[p.source]?.cls ?? 'bg-paper-2 text-ink-3'
+                      }`}
+                    >
+                      {SRC_META[p.source]?.label ?? p.source}
+                    </span>
+                  </div>
+                  <div className="num text-[12px] font-extrabold text-ink">
+                    {p.toman ? fmt(Math.round(p.toman)) : '—'}
+                  </div>
+                </div>
+              ))}
           </div>
           <div className="mt-4">
             <Banner tone="info">
-              منابع قیمت: CoinGecko برای رمزارز و اونس طلا، نرخ مرجع جهانی برای دلار. در صورت
-              عدم دسترسی، آخرین نرخ ذخیره‌شده یا نرخ دستی شما (از تنظیمات) استفاده می‌شود.
+              منابع: طلایار/TGJU (بازار ایران)، بیت‌پین (بازار تومانی + نرخ مشتق دلار از تتر)،
+              CoinGecko (رمزارز)، Gold-API (نقره/پلاتین) و COMEX (مس). در صورت قطعی، ابتدا
+              آخرین قیمت واقعی (کش) و سپس نرخ دستی شما (تنظیمات) استفاده می‌شود. فرمول‌های
+              مشتق‌سازی: فایل <span className="font-extrabold">docs/PRICE_ENGINE.md</span>
             </Banner>
           </div>
         </div>
@@ -298,7 +340,7 @@ export function Assets() {
       <ConfirmDialog
         open={!!deleteId}
         title="حذف دارایی"
-        message="این دارایی از فهرست شما حذف می‌شود (تراکنش‌های دفتر دست‌نخورده باقی می‌مانند). ادامه می‌دهید؟"
+        message="این دارایی به‌همراه تراکنش‌های خرید/فروش مرتبط آن حذف و اثر نقدی برگردانده می‌شود تا تراز بماند. ادامه می‌دهید؟"
         confirmLabel="حذف شود"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
@@ -317,17 +359,20 @@ function AddAssetModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onAdd: (a: {
-    kind: 'gold' | 'currency' | 'crypto' | 'other';
-    name: string;
-    symbol: string;
-    unit: string;
-    quantity: number;
-    avgBuy: number;
-    note?: string;
-  }) => void;
+  onAdd: (
+    a: {
+      kind: 'gold' | 'currency' | 'crypto' | 'metal' | 'other';
+      name: string;
+      symbol: string;
+      unit: string;
+      quantity: number;
+      avgBuy: number;
+      note?: string;
+    },
+    opts?: { fromCash?: boolean }
+  ) => void;
 }) {
-  const { prices, cash, addTx } = useStore();
+  const { prices, cash } = useStore();
   const [kind, setKind] = useState('gold');
   const [preset, setPreset] = useState('GOLD18');
   const [name, setName] = useState('طلای ۱۸ عیار');
@@ -357,26 +402,19 @@ function AddAssetModal({
       setError(`مجموع خرید (${fmt(total)} تومان) از موجودی نقد بیشتر است.`);
       return;
     }
-    onAdd({
-      kind: kind as never,
-      name: name || selected?.name || 'دارایی',
-      symbol: selected?.symbol ?? 'OTHER',
-      unit: selected?.unit ?? 'واحد',
-      quantity: q,
-      avgBuy: avg,
-      note: note.trim() || undefined,
-    });
-    if (fromCash) {
-      addTx({
-        type: 'investment',
-        kind,
-        category: kind,
-        title: `خرید ${name || selected?.name}`,
-        amount: total,
-        date: todayISO(),
+    // اتمیک داخل store: ثبت دارایی + کسر نقد + سند خریدِ پیوندخورده (باگ شماره ۷)
+    onAdd(
+      {
+        kind: kind as never,
+        name: name || selected?.name || 'دارایی',
+        symbol: selected?.symbol ?? 'OTHER',
+        unit: selected?.unit ?? 'واحد',
+        quantity: q,
+        avgBuy: avg,
         note: note.trim() || undefined,
-      });
-    }
+      },
+      { fromCash }
+    );
     setQty('');
     setAvgBuy('');
     setNote('');
@@ -413,7 +451,7 @@ function AddAssetModal({
               setPreset(first.symbol);
               setName(first.name);
             }}
-            columns={4}
+            columns={3}
           />
         </div>
 

@@ -24,7 +24,7 @@ const FEATURES = [
 ];
 
 export function Welcome() {
-  const { settings, updateSettings, cash, state } = useStore();
+  const { settings, updateSettings, setCash, cash, state } = useStore();
   const [step, setStep] = useState(0);
   const [name, setName] = useState(settings.name ?? '');
   const [initialCash, setInitialCash] = useState(settings.name ? String(state.cash || '') : '');
@@ -370,6 +370,12 @@ export function Welcome() {
                           }
                         }
                         setError('');
+                        // باگ شماره ۸: موجودی اولیه واردشده باید ذخیره شود (قبلاً گم می‌شد)
+                        setCash(
+                          initialCash.trim()
+                            ? Math.max(0, parseAmount(initialCash))
+                            : Math.max(0, state.cash || 0)
+                        );
                         updateSettings({
                           name: name.trim(),
                           monthlyFixedIncome: parseAmount(fixedIncome),

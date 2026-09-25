@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Search, Filter, Trash2, Plus, Receipt, Download } from 'lucide-react';
+import { Search, Filter, Plus, Receipt, Download } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { summarize, expenseByCategory, EXPENSE_CATEGORIES } from '../lib/analysis';
-import { fmt, compact, pct, jDateLabel, monthStart, monthEnd, daysAgoISO, faDigits } from '../lib/format';
+import { fmt, compact, pct, monthStart, monthEnd, daysAgoISO, faDigits } from '../lib/format';
 import { SectionHeader, EmptyState, ConfirmDialog, Banner, StatCard } from '../components/ui';
 import { TxModal } from '../components/TxModal';
 import { TxRow } from './Dashboard';
@@ -239,7 +239,7 @@ export function Transactions() {
       <ConfirmDialog
         open={!!deleteId}
         title="حذف تراکنش"
-        message="این تراکنش حذف و مبلغ آن از موجودی نقد شما برگردانده می‌شود. ادامه می‌دهید؟"
+        message="این تراکنش حذف و اثر نقدی آن برگردانده می‌شود؛ اگر به وام، هدف یا دارایی مرتبط باشد، رکورد مرتبط نیز به حالت قبل برمی‌گردد. ادامه می‌دهید؟"
         confirmLabel="حذف شود"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
