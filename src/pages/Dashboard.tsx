@@ -11,6 +11,8 @@ import {
   Sparkles,
   ArrowUpLeft,
   ArrowDownLeft,
+  ArrowLeftRight,
+  CreditCard,
   RefreshCw,
   Plus,
   ChevronLeft,
@@ -33,7 +35,7 @@ import { TxModal } from '../components/TxModal';
 
 export function Dashboard() {
   const store = useStore();
-  const { settings, txs, prices, assets, loans, goals, refreshing, refreshPrices } = store;
+  const { settings, txs, prices, assets, loans, goals, accounts, refreshing, refreshPrices } = store;
   const [txOpen, setTxOpen] = useState(false);
 
   const nw = useMemo(() => computeNetWorth(store.state, prices), [store.state, prices]);
@@ -110,6 +112,26 @@ export function Dashboard() {
                   </span>
                 )}
               </div>
+              {/* فاز ۱۵ — موجودی هر حساب در یک نگاه */}
+              {accounts.filter((a) => !a.archived).length > 1 && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  {accounts
+                    .filter((a) => !a.archived)
+                    .map((a) => (
+                      <Link
+                        key={a.id}
+                        to="/accounts"
+                        className="flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[9px] font-bold text-white/85 transition hover:bg-white/15"
+                      >
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: a.color || '#fff' }}
+                        />
+                        {a.name}: <span className="num">{compact(a.balance)}</span>
+                      </Link>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -601,9 +623,22 @@ export function TxRow({
   tx,
   onDelete,
 }: {
-  tx: { id: string; type: string; kind: string; category: string; title: string; amount: number; date: string };
+  tx: {
+    id: string;
+    type: string;
+    kind: string;
+    category: string;
+    title: string;
+    amount: number;
+    date: string;
+    accountId?: string;
+    link?: { type: string; toId?: string };
+  };
   onDelete?: (id: string) => void;
 }) {
+  const { accounts } = useStore();
+  const accountName = (id?: string) =>
+    id ? (accounts.find((a) => a.id === id)?.name ?? 'حساب حذف‌شده') : null;
   const meta: Record<string, { label: string; color: string; icon: React.ReactNode; sign: string }> = {
     income: {
       label: tx.kind === 'fixed' ? 'درآمد ثابت' : 'درآمد متغیر',
@@ -635,8 +670,20 @@ export function TxRow({
       icon: <Landmark size={13} />,
       sign: tx.kind === 'principal' ? '+' : '−',
     },
+    // فاز ۱۵ — انتقال بین حساب‌ها: نه واریز نه برداشت (اثر خالص صفر)
+    transfer: {
+      label: 'انتقال بین حساب‌ها',
+      color: 'bg-paper-2 text-ink-2',
+      icon: <ArrowLeftRight size={13} />,
+      sign: '⇄',
+    },
   };
   const m = meta[tx.type] ?? meta.expense;
+  // برچسب حساب: برای انتقال «از X به Y»، برای بقیه نام حساب مؤثر (اگر ثبت شده)
+  const accLabel =
+    tx.type === 'transfer' && tx.link?.type === 'account-transfer'
+      ? `${accountName(tx.accountId) ?? '?'} ← ${accountName(tx.link.toId) ?? '?'}`
+      : accountName(tx.accountId);
 
   return (
     <div className="group flex items-center gap-3 rounded-[15px] border border-line/80 bg-paper/40 px-3.5 py-3 transition hover:border-line-2 hover:bg-white">
@@ -645,10 +692,18 @@ export function TxRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[11.5px] font-bold text-ink">{tx.title}</div>
-        <div className="mt-0.5 flex items-center gap-2 text-[9px] font-semibold text-ink-3">
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[9px] font-semibold text-ink-3">
           <span>{m.label}</span>
           <span className="h-1 w-1 rounded-full bg-line-2" />
           <span>{jDateLabel(tx.date, false)}</span>
+          {accLabel && (
+            <>
+              <span className="h-1 w-1 rounded-full bg-line-2" />
+              <span className="flex items-center gap-1 text-ink-2">
+                <CreditCard size={9} /> {accLabel}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="text-left">
@@ -657,7 +712,8 @@ export function TxRow({
             m.sign === '+' ? 'text-brand-2' : 'text-ink'
           }`}
         >
-          {m.sign} {fmt(tx.amount)}
+          {m.sign !== '⇄' && `${m.sign} `}
+          {fmt(tx.amount)}
         </div>
         <div className="text-[8.5px] font-semibold text-ink-3">تومان</div>
       </div>

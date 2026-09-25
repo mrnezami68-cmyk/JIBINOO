@@ -4,6 +4,7 @@ import { StoreProvider, useStore } from './lib/store';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Transactions } from './pages/Transactions';
+import { Accounts } from './pages/Accounts';
 import { Assets } from './pages/Assets';
 import { Reports } from './pages/Reports';
 import { Goals } from './pages/Goals';
@@ -47,6 +48,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/transactions" element={<Transactions />} />
+        <Route path="/accounts" element={<Accounts />} />
         <Route path="/assets" element={<Assets />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/goals" element={<Goals />} />

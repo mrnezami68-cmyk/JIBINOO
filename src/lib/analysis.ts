@@ -6,6 +6,11 @@ import type { AppState, Asset, PriceState, Tx } from './types';
 import { compact, monthKey, monthStart, pct, daysAgoISO, fmt, toISODate } from './format';
 import { priceForAsset } from './prices';
 
+/** نقد کل مشتق = مجموع موجودی حساب‌ها (فاز ۱۵ — تک‌نقطه حقیقت برای تحلیل‌ها) */
+export function totalCash(state: Pick<AppState, 'accounts'>): number {
+  return (state.accounts ?? []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
+}
+
 export interface ValuedAsset extends Asset {
   livePrice: number | null;
   value: number;
@@ -56,6 +61,7 @@ export interface NetWorth {
 }
 
 export function computeNetWorth(state: AppState, prices: PriceState): NetWorth {
+  const cash = totalCash(state);
   const valued = valueAssets(state.assets, prices);
   const investments = valued.reduce((s, a) => s + a.value, 0);
   const investedCost = valued.reduce((s, a) => s + a.cost, 0);
@@ -73,16 +79,16 @@ export function computeNetWorth(state: AppState, prices: PriceState): NetWorth {
     valued.filter((a) => a.kind === kind).reduce((s, a) => s + a.value, 0);
 
   return {
-    cash: state.cash,
+    cash,
     investments,
     goals,
     debts,
-    net: state.cash + investments + goals - debts,
+    net: cash + investments + goals - debts,
     investedCost,
     pnl: investments - investedCost,
     pnlPct: investedCost > 0 ? (investments - investedCost) / investedCost : 0,
     byClass: [
-      { key: 'cash', label: 'نقد', value: state.cash, color: '#2f9c78' },
+      { key: 'cash', label: 'نقد', value: cash, color: '#2f9c78' },
       { key: 'gold', label: 'طلا و سکه', value: classValue('gold'), color: '#c08d2c' },
       { key: 'metal', label: 'فلزات', value: classValue('metal'), color: '#6f8390' },
       { key: 'currency', label: 'ارز', value: classValue('currency'), color: '#4a86b4' },
@@ -304,7 +310,7 @@ export function financialHealth(state: AppState, prices: PriceState): HealthRepo
   const nw = computeNetWorth(state, prices);
 
   const avgMonthlyExpense = recent.expense > 0 ? recent.expense / 3 : 0;
-  const emergencyMonths = avgMonthlyExpense > 0 ? state.cash / avgMonthlyExpense : 6;
+  const emergencyMonths = avgMonthlyExpense > 0 ? totalCash(state) / avgMonthlyExpense : 6;
   const monthlyIncome = recent.income / 3;
   const debtRatio = monthlyIncome > 0 ? recent.loanPaid / 3 / monthlyIncome : 0;
   const goalProgress =
@@ -406,7 +412,7 @@ export function investmentHealth(state: AppState, prices: PriceState): HealthRep
   const performance = nw.pnlPct;
   const liveShare =
     total > 0 ? valued.filter((a) => a.live).reduce((s, a) => s + a.value, 0) / total : 1;
-  const liquidShare = nw.net > 0 ? state.cash / nw.net : 1;
+  const liquidShare = nw.net > 0 ? totalCash(state) / nw.net : 1;
 
   const metrics: HealthMetric[] = [
     {

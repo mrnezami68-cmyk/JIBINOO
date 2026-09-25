@@ -160,7 +160,16 @@ describe('computeNetWorth — تراز کامل', () => {
   it('خالص = نقد + سرمایه‌گذاری + اهداف − بدهی', () => {
     const state = {
       settings: { name: 'تست' },
-      cash: 10_000_000,
+      // فاز ۱۵: نقد مشتق از حساب‌ها
+      accounts: [
+        {
+          id: 'acc1',
+          name: 'پول نقد',
+          balance: 10_000_000,
+          isDefault: true,
+          createdAt: '2026-01-01',
+        },
+      ],
       txs: [],
       assets: [
         {
@@ -228,5 +237,24 @@ describe('lastMonths — کلید ماه با برچسب ماه هماهنگ ا�
     const now = new Date();
     const expectedKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     expect(months[0].key).toBe(expectedKey);
+  });
+});
+
+describe('summarize — انتقال بین حساب‌ها (فاز ۱۵)', () => {
+  it('transfer نه درآمد است نه هزینه و در هیچ شمارنده‌ای نمی‌نشیند', () => {
+    const txs: Tx[] = [
+      tx({ type: 'income', kind: 'fixed', amount: 30_000_000, date: '2026-09-01' }),
+      tx({ type: 'transfer', kind: 'transfer', amount: 15_000_000, date: '2026-09-02', accountId: 'a', link: { type: 'account-transfer', toId: 'b' } }),
+      tx({ type: 'expense', amount: 2_000_000, date: '2026-09-03' }),
+    ];
+    const s = summarize(txs);
+    expect(s.income).toBe(30_000_000);
+    expect(s.expense).toBe(2_000_000);
+    expect(s.investment).toBe(0);
+    expect(s.goalDeposit).toBe(0);
+    expect(s.loanPaid).toBe(0);
+    expect(s.assetSell).toBe(0);
+    expect(s.netFlow).toBe(28_000_000);
+    expect(s.count).toBe(3); // سند انتقال در دفتر هست، ولی در هیچ جمعی نیست
   });
 });

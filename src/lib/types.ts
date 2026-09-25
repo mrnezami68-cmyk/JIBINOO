@@ -2,7 +2,7 @@
  * Jibino data model
  * ------------------------------------------------------------------ */
 
-export type TxType = 'income' | 'expense' | 'investment' | 'goal' | 'loan';
+export type TxType = 'income' | 'expense' | 'investment' | 'goal' | 'loan' | 'transfer';
 
 export interface Tx {
   id: string;
@@ -11,7 +11,8 @@ export interface Tx {
    * income: fixed | variable ;
    * investment: asset class (buy) | sell ;
    * goal: deposit | withdraw ;
-   * loan: payment (پرداخت قسط) | principal (دریافت اصل وام)
+   * loan: payment (پرداخت قسط) | principal (دریافت اصل وام) ;
+   * transfer: transfer (انتقال بین حساب‌ها)
    */
   kind: string;
   category: string;
@@ -21,7 +22,13 @@ export interface Tx {
   date: string;
   note?: string;
   /**
-   * پیوند اختیاری با رکورد مرتبط (وام / هدف / دارایی).
+   * حساب مبدأ (برداشت) یا مقصد (واریز) — فاز ۱۵.
+   * برای تراکنش‌های قدیمی (پیش از فاز ۱۵) ممکن است undefined باشد؛
+   * در آن صورت حساب پیش‌فرض به‌عنوان حساب مؤثر در نظر گرفته می‌شود.
+   */
+  accountId?: string;
+  /**
+   * پیوند اختیاری با رکورد مرتبط (وام / هدف / دارایی / حساب مقصد در انتقال).
    * هر تراکنشی که اثر مشترک روی نقد و یک رکورد دارد باید این پیوند را داشته باشد
    * تا هنگام حذف تراکنش، اثر آن روی رکورد مرتبط نیز به‌صورت اتمیک برگردد.
    */
@@ -42,6 +49,7 @@ export type TxLink =
   | { type: 'loan-principal'; refId: string }
   | { type: 'goal-transfer'; refId: string; subId: string }
   | { type: 'asset-buy'; refId: string; qty: number; unitPrice: number }
+  | { type: 'account-transfer'; toId: string }
   | {
       type: 'asset-sell';
       refId: string;
@@ -123,6 +131,34 @@ export interface Settings {
   manualGold18: number | null;
 }
 
+/* --------------------------- bank accounts -------------------------- */
+
+/**
+ * حساب بانکی / کیف پول نقد — فاز ۱۵.
+ * «پول نقد» هم یک حساب است (بدون نام بانک). مجموع balance همه حساب‌ها = نقد کل مشتق.
+ */
+export interface Account {
+  id: string;
+  /** نام دلخواه کاربر، مثل «سامان — خرج خانه» یا «پول نقد» */
+  name: string;
+  /** نام بانک (اختیاری) — برای کیف پول نقد خالی می‌ماند */
+  bank?: string;
+  /** رنگ کارت حساب در UI */
+  color?: string;
+  /** موجودی فعلی — شمارنده اتمیک (دقیقاً مثل cash قبل از فاز ۱۵، فقط به‌ازای هر حساب) */
+  balance: number;
+  /**
+   * حساب پیش‌فرض — فقط نقش فال‌بک دارد: تراکنش‌های قدیمی بدون accountId
+   * به این حساب نسبت داده می‌شوند و مهاجرت v2→v3 موجودی قدیمی را اینجا می‌گذارد.
+   * در جریان ثبت، انتخاب حساب همیشه توسط کاربر انجام می‌شود (تصمیم ۲ سند طراحی).
+   */
+  isDefault?: boolean;
+  /** حذف نرم — حساب دارای تاریخچه آرشیو می‌شود تا اسنادش یتیم نمانند (تصمیم ۳) */
+  archived?: boolean;
+  note?: string;
+  createdAt: string;
+}
+
 export interface TestDimension {
   key: string;
   label: string;
@@ -198,7 +234,8 @@ export interface PriceState {
 
 export interface AppState {
   settings: Settings;
-  cash: number;
+  /** نقد کل = مجموع balance حساب‌ها (مشتق — تصمیم ۱ سند طراحی فاز ۱۵) */
+  accounts: Account[];
   txs: Tx[];
   assets: Asset[];
   loans: Loan[];

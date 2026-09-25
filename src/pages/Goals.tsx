@@ -21,6 +21,7 @@ import {
   ConfirmDialog,
   StatCard,
 } from '../components/ui';
+import { AccountPicker } from '../components/AccountPicker';
 import { Progress, Ring } from '../components/charts';
 
 const GOAL_ICONS = ['💻', '🏠', '✈️', '🚗', '💍', '🎓', '🪙', '📱', '🎯', '🛡️', '🎁', '📚'];
@@ -214,9 +215,9 @@ export function Goals() {
         goalId={transferId}
         mode="deposit"
         onClose={() => setTransferId(null)}
-        onTransfer={(amount) => {
+        onTransfer={(amount, accountId) => {
           if (transferId) {
-            transferGoal(transferId, amount, 'deposit');
+            transferGoal(transferId, amount, 'deposit', { accountId });
           }
           setTransferId(null);
         }}
@@ -226,9 +227,9 @@ export function Goals() {
         goalId={withdrawId}
         mode="withdraw"
         onClose={() => setWithdrawId(null)}
-        onTransfer={(amount) => {
+        onTransfer={(amount, accountId) => {
           if (withdrawId) {
-            transferGoal(withdrawId, amount, 'withdraw');
+            transferGoal(withdrawId, amount, 'withdraw', { accountId });
           }
           setWithdrawId(null);
         }}
@@ -351,12 +352,16 @@ function TransferModal({
   goalId: string | null;
   mode: 'deposit' | 'withdraw';
   onClose: () => void;
-  onTransfer: (amount: number) => void;
+  onTransfer: (amount: number, accountId: string) => void;
 }) {
-  const { goals, cash } = useStore();
+  const { goals, accounts } = useStore();
+  const activeAccounts = accounts.filter((a) => !a.archived);
   const goal = goals.find((g) => g.id === goalId);
   const [amount, setAmount] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
+
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
   const saved = goal
     ? goal.transfers.reduce((s, t) => s + (t.kind === 'deposit' ? t.amount : -t.amount), 0)
@@ -373,16 +378,34 @@ function TransferModal({
       }
       subtitle={
         mode === 'deposit'
-          ? 'مبلغ از موجودی نقد کم و به پس‌انداز هدف اضافه می‌شود.'
-          : 'مبلغ از پس‌انداز هدف کم و به موجودی نقد برمی‌گردد.'
+          ? 'مبلغ از حسابی که انتخاب می‌کنید کم و به پس‌انداز هدف اضافه می‌شود.'
+          : 'مبلغ از پس‌انداز هدف کم و به حسابی که انتخاب می‌کنید برمی‌گردد.'
       }
       size="sm"
     >
       <div className="space-y-4">
         <div className="rounded-[15px] border border-line bg-paper/50 p-4 text-[10.5px] font-semibold text-ink-2">
-          پس‌انداز فعلی هدف: <span className="num font-extrabold">{fmt(saved)}</span> تومان •
-          موجودی نقد: <span className="num font-extrabold">{fmt(cash)}</span> تومان
+          پس‌انداز فعلی هدف: <span className="num font-extrabold">{fmt(saved)}</span> تومان
+          {selectedAccount && mode === 'deposit' && (
+            <>
+              {' '}• موجودی «{selectedAccount.name}»:{' '}
+              <span className="num font-extrabold">{fmt(selectedAccount.balance)}</span> تومان
+            </>
+          )}
         </div>
+        {/* فاز ۱۵ — حساب مبدأ/مقصد (الزامی) */}
+        <AccountPicker
+          value={accountId}
+          onChange={(id) => {
+            setAccountId(id);
+            setError('');
+          }}
+          label={
+            mode === 'deposit'
+              ? 'از کدام حساب به هدف واریز می‌شود؟'
+              : 'به کدام حساب برگردانده شود؟'
+          }
+        />
         <Field label="مبلغ" hint="تومان">
           <AmountInput
             value={amount}
@@ -402,15 +425,25 @@ function TransferModal({
                 setError('مبلغ را وارد کنید.');
                 return;
               }
-              if (mode === 'deposit' && v > cash) {
-                setError(`موجودی نقد کافی نیست (${fmt(cash)} تومان).`);
+              if (activeAccounts.length === 0) {
+                setError('هنوز حسابی ندارید؛ ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
+                return;
+              }
+              if (!selectedAccount) {
+                setError('حساب موردنظر این جابه‌جایی را انتخاب کنید.');
+                return;
+              }
+              if (mode === 'deposit' && v > selectedAccount.balance) {
+                setError(
+                  `موجودی حساب «${selectedAccount.name}» کافی نیست (${fmt(selectedAccount.balance)} تومان).`
+                );
                 return;
               }
               if (mode === 'withdraw' && v > saved) {
                 setError(`بیشتر از پس‌انداز هدف است (${fmt(saved)} تومان).`);
                 return;
               }
-              onTransfer(v);
+              onTransfer(v, accountId);
               setAmount('');
               setError('');
             }}

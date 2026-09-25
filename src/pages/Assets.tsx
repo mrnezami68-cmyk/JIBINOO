@@ -15,6 +15,7 @@ import { valueAssets, computeNetWorth, investmentByType } from '../lib/analysis'
 import { fmt, compact, pct, freshness, parseAmount, todayISO, jDateLabel } from '../lib/format';
 import { priceForAsset } from '../lib/prices';
 import { SectionHeader, Modal, Field, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard, AmountInput } from '../components/ui';
+import { AccountPicker } from '../components/AccountPicker';
 import { Donut, Progress } from '../components/charts';
 
 const KIND_OPTIONS = [
@@ -354,8 +355,8 @@ export function Assets() {
       <SellModal
         assetId={sellId}
         onClose={() => setSellId(null)}
-        onSell={(qty, price) => {
-          if (sellId) sellAsset(sellId, qty, price);
+        onSell={(qty, price, accountId) => {
+          if (sellId) sellAsset(sellId, qty, price, undefined, { accountId });
           setSellId(null);
         }}
       />
@@ -402,10 +403,11 @@ function AddAssetModal({
       avgBuy: number;
       note?: string;
     },
-    opts?: { fromCash?: boolean }
+    opts?: { fromCash?: boolean; accountId?: string }
   ) => void;
 }) {
-  const { prices, cash } = useStore();
+  const { prices, accounts } = useStore();
+  const activeAccounts = accounts.filter((a) => !a.archived);
   const [kind, setKind] = useState('gold');
   const [preset, setPreset] = useState('GOLD18');
   const [name, setName] = useState('طلای ۱۸ عیار');
@@ -413,11 +415,13 @@ function AddAssetModal({
   const [avgBuy, setAvgBuy] = useState('');
   const [note, setNote] = useState('');
   const [fromCash, setFromCash] = useState(true);
+  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState('');
 
   const presets = SYMBOL_PRESETS[kind] ?? SYMBOL_PRESETS.other;
   const selected = presets.find((p) => p.symbol === preset) ?? presets[0];
   const live = selected ? priceForAsset(prices, kind, selected.symbol) : { toman: null };
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
 
   const handleSubmit = () => {
     const q = parseAmount(qty);
@@ -431,11 +435,21 @@ function AddAssetModal({
       return;
     }
     const total = q * avg;
-    if (fromCash && total > cash) {
-      setError(`مجموع خرید (${fmt(total)} تومان) از موجودی نقد بیشتر است.`);
+    if (fromCash && activeAccounts.length === 0) {
+      setError('برای پرداخت از موجودی، ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
       return;
     }
-    // اتمیک داخل store: ثبت دارایی + کسر نقد + سند خریدِ پیوندخورده (باگ شماره ۷)
+    if (fromCash && !selectedAccount) {
+      setError('حسابی که هزینه خرید از آن کسر می‌شود را انتخاب کنید.');
+      return;
+    }
+    if (fromCash && selectedAccount && total > selectedAccount.balance) {
+      setError(
+        `مجموع خرید (${fmt(total)} تومان) از موجودی حساب «${selectedAccount.name}» (${fmt(selectedAccount.balance)} تومان) بیشتر است.`
+      );
+      return;
+    }
+    // اتمیک داخل store: ثبت دارایی + کسر از حساب + سند خریدِ پیوندخورده (باگ شماره ۷)
     onAdd(
       {
         kind: kind as never,
@@ -446,7 +460,7 @@ function AddAssetModal({
         avgBuy: avg,
         note: note.trim() || undefined,
       },
-      { fromCash }
+      { fromCash, accountId }
     );
     setQty('');
     setAvgBuy('');
@@ -559,10 +573,21 @@ function AddAssetModal({
               مبلغ خرید از موجودی نقد کم و در دفتر تراکنش‌ها ثبت شود
             </div>
             <div className="mt-1 text-[9.5px] font-medium leading-5 text-ink-3">
-              موجودی نقد فعلی: {fmt(cash)} تومان — این مبلغ «سرمایه‌گذاری» ثبت می‌شود، نه هزینه.
+              این مبلغ از حساب انتخاب‌شده کسر و «سرمایه‌گذاری» ثبت می‌شود، نه هزینه.
             </div>
           </div>
         </label>
+
+        {fromCash && (
+          <AccountPicker
+            value={accountId}
+            onChange={(id) => {
+              setAccountId(id);
+              setError('');
+            }}
+            label="هزینه خرید از کدام حساب کسر شود؟"
+          />
+        )}
 
         {error && <Banner tone="danger">{error}</Banner>}
       </div>
@@ -577,12 +602,15 @@ function SellModal({
 }: {
   assetId: string | null;
   onClose: () => void;
-  onSell: (quantity: number, unitPrice: number) => void;
+  onSell: (quantity: number, unitPrice: number, accountId: string) => void;
 }) {
-  const { assets, prices } = useStore();
+  const { assets, prices, accounts } = useStore();
+  const activeAccounts = accounts.filter((a) => !a.archived);
   const asset = assets.find((a) => a.id === assetId);
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [error, setError] = useState('');
 
   const live = asset ? priceForAsset(prices, asset.kind, asset.symbol) : { toman: null };
 
@@ -591,7 +619,7 @@ function SellModal({
       open={!!assetId}
       onClose={onClose}
       title={`فروش ${asset?.name ?? 'دارایی'}`}
-      subtitle="مبلغ فروش به موجودی نقد شما واریز می‌شود."
+      subtitle="مبلغ فروش به حسابی که انتخاب می‌کنید واریز می‌شود."
       size="sm"
       footer={
         asset ? (
@@ -601,7 +629,18 @@ function SellModal({
               onClick={() => {
                 const q = qty.trim() ? parseAmount(qty) : asset.quantity;
                 const p = price.trim() ? parseAmount(price) : (live.toman ?? asset.avgBuy);
-                if (q > 0 && p > 0) onSell(Math.min(q, asset.quantity), p);
+                if (activeAccounts.length === 0) {
+                  setError('هنوز حسابی ندارید؛ ابتدا از صفحه «حساب‌ها» یک حساب بسازید.');
+                  return;
+                }
+                if (!accountId) {
+                  setError('حسابی که مبلغ فروش به آن واریز می‌شود را انتخاب کنید.');
+                  return;
+                }
+                if (q > 0 && p > 0) {
+                  setError('');
+                  onSell(Math.min(q, asset.quantity), p, accountId);
+                }
               }}
             >
               ثبت فروش
@@ -641,6 +680,16 @@ function SellModal({
               placeholder={String(Math.round(live.toman ?? asset.avgBuy))}
             />
           </Field>
+          {/* فاز ۱۵ — حساب مقصد حاصل فروش */}
+          <AccountPicker
+            value={accountId}
+            onChange={(id) => {
+              setAccountId(id);
+              setError('');
+            }}
+            label="مبلغ فروش به کدام حساب واریز شود؟"
+          />
+          {error && <Banner tone="danger">{error}</Banner>}
         </div>
       )}
     </Modal>
