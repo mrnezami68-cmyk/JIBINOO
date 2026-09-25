@@ -64,6 +64,15 @@ export interface Asset {
   avgBuy: number;
   note?: string;
   createdAt: string;
+  /**
+   * قیمت دستی هر واحد (تومان) — برای دارایی‌هایی که قیمت لحظه‌ای ندارند
+   * (ملک، خودرو، زمین، مس و…) یا کاربر می‌خواهد قیمت را خودش به‌روز کند.
+   */
+  manualPrice?: number | null;
+  /** تاریخ آخرین به‌روزرسانی قیمت دستی (ISO) */
+  manualPriceAt?: string;
+  /** اگر true باشد قیمت دستی حتی در حضور قیمت لحظه‌ای هم ملاک ارزش‌گذاری است */
+  useManualPrice?: boolean;
 }
 
 export interface LoanPayment {

@@ -3,7 +3,7 @@
  * ------------------------------------------------------------------ */
 
 import type { AppState, Asset, PriceState, Tx } from './types';
-import { compact, monthKey, monthStart, pct, daysAgoISO, fmt } from './format';
+import { compact, monthKey, monthStart, pct, daysAgoISO, fmt, toISODate } from './format';
 import { priceForAsset } from './prices';
 
 export interface ValuedAsset extends Asset {
@@ -13,13 +13,20 @@ export interface ValuedAsset extends Asset {
   pnl: number;
   pnlPct: number;
   live: boolean;
+  /** مبنای ارزش‌گذاری فعلی: قیمت لحظه‌ای / قیمت دستی کاربر / قیمت تمام‌شده خرید */
+  priceBasis: 'live' | 'manual' | 'cost';
+  /** قیمت واحدی که واقعاً ملاک محاسبه بوده */
+  unitPrice: number;
 }
 
 export function valueAssets(assets: Asset[], prices: PriceState): ValuedAsset[] {
   return assets.map((a) => {
     const { toman } = priceForAsset(prices, a.kind, a.symbol);
     const livePrice = toman;
-    const unitPrice = livePrice ?? a.avgBuy;
+    // اولویت: قیمت دستیِ فعال ← قیمت لحظه‌ای ← قیمت تمام‌شده خرید (فاز ۱۳)
+    const manual = a.manualPrice && a.manualPrice > 0 ? a.manualPrice : null;
+    const useManual = manual !== null && (a.useManualPrice || livePrice === null);
+    const unitPrice = useManual ? manual : (livePrice ?? a.avgBuy);
     const value = a.quantity * unitPrice;
     const cost = a.quantity * a.avgBuy;
     return {
@@ -29,7 +36,9 @@ export function valueAssets(assets: Asset[], prices: PriceState): ValuedAsset[] 
       cost,
       pnl: value - cost,
       pnlPct: cost > 0 ? (value - cost) / cost : 0,
-      live: livePrice !== null,
+      live: !useManual && livePrice !== null,
+      priceBasis: useManual ? 'manual' : livePrice !== null ? 'live' : 'cost',
+      unitPrice,
     };
   });
 }
@@ -150,7 +159,8 @@ export function lastMonths(txs: Tx[], count = 6): MonthPoint[] {
   const now = new Date();
   for (let i = count - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = monthKey(d.toISOString().slice(0, 10));
+    // تاریخ باید با وقت محلی ساخته شود تا کلید ماه با برچسب ماه هماهنگ بماند (باگ P0)
+    const key = monthKey(toISODate(d));
     const monthTxs = txs.filter((t) => t.date.startsWith(key));
     const income = monthTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expense = monthTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);

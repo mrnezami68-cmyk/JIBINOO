@@ -1,5 +1,5 @@
 /* Jibino PWA service worker — offline shell + runtime caching */
-const CACHE = 'jibino-v1';
+const CACHE = 'jibino-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-512.png', '/images/hero.png'];
 
 self.addEventListener('install', (event) => {
@@ -19,7 +19,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  const isApi = /coingecko|er-api|exchangerate|tgju/.test(url.hostname);
+  // فاز ۱۳: میزبان‌های داده بازار به‌روز شدند — قیمت‌ها همیشه فقط از شبکه
+  const isApi = /coingecko|er-api|exchangerate|tgju|bitpin|gold-api|finance\.yahoo|github\.io/.test(url.hostname);
 
   // Live prices: network only (never serve stale market data from cache as a fallback silently)
   if (isApi) return;
