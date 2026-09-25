@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .vite-source-tags.js
 .vercel
+
+# آثار استقرار پلتفرم (نباید کامیت شوند)
+/input*.txt
+/[0-9]*_*.txt

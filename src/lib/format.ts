@@ -50,8 +50,21 @@ export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
+/**
+ * تاریخ ISO (yyyy-mm-dd) بر اساس «وقت محلی» دستگاه کاربر.
+ * هرگز از toISOString() برای تولید تاریخ استفاده نکنید — آن تابع UTC است و
+ * در منطقه‌های جلوتر از UTC (مثل ایران +۳:۳۰) بین نیمه‌شب تا صبح، تاریخ یک روز
+ * عقب می‌افتد و مرز ماه‌ها جابه‌جا می‌شود (باگ P0 شماره ۱).
+ */
+export function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toISODate(new Date());
 }
 
 /* --------------------------- Jalali dates --------------------------- */
@@ -168,8 +181,12 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function addMonthsISO(iso: string, months: number): string {
   const d = new Date(iso + 'T00:00:00');
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const targetMonth = d.getMonth() + months;
+  // سرریز روز جلوگیری می‌شود: ۳۱ فروردین + ۱ ماه = ۳۱ اردیبهشت؟ نه — ۳۰ اردیبهشت
+  const lastDayOfTarget = new Date(d.getFullYear(), targetMonth + 1, 0).getDate();
+  d.setDate(Math.min(d.getDate(), lastDayOfTarget));
+  d.setMonth(targetMonth);
+  return toISODate(d);
 }
 
 export function monthKey(iso: string): string {
@@ -177,15 +194,15 @@ export function monthKey(iso: string): string {
 }
 
 export function monthStart(d = new Date()): string {
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return toISODate(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 export function monthEnd(d = new Date()): string {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return toISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 export function daysAgoISO(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return toISODate(d);
 }

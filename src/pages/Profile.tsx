@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   User,
@@ -18,6 +18,8 @@ import {
   Info,
   Pencil,
   BookOpen,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { financialHealth, investmentHealth, computeNetWorth, buildInsights } from '../lib/analysis';
@@ -29,7 +31,7 @@ import {
   scorePersonalityTest,
   bandLabel,
 } from '../lib/tests';
-import { fmt, compact, pct, faDigits, freshness, parseAmount, jDateLabel } from '../lib/format';
+import { fmt, compact, pct, faDigits, freshness, parseAmount, jDateLabel, todayISO } from '../lib/format';
 import {
   SectionHeader,
   Modal,
@@ -55,6 +57,7 @@ export function Profile() {
     assets,
     goals,
     loans,
+    importBackup,
   } = store;
 
   const nw = useMemo(() => computeNetWorth(store.state, prices), [store.state, prices]);
@@ -68,6 +71,58 @@ export function Profile() {
   const [pinOpen, setPinOpen] = useState(false);
   const [rateOpen, setRateOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+
+  // پشتیبان‌گیری (P0 شماره ۳)
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<unknown>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+  /** خروجی کامل داده‌ها به فایل JSON — برای انتقال به دستگاه دیگر یا نگهداری امن */
+  const exportBackup = () => {
+    try {
+      const payload = {
+        app: 'jibino',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        state: store.state,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `jibino-backup-${todayISO()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setBackupMsg({
+        tone: 'success',
+        text: 'فایل پشتیبان ساخته و دانلود شد. آن را جای مطمئنی (مثلاً حافظه ابری شخصی) نگه دارید.',
+      });
+    } catch {
+      setBackupMsg({ tone: 'danger', text: 'ساخت فایل پشتیبان ناموفق بود.' });
+    }
+  };
+
+  /** انتخاب فایل پشتیبان → نمایش تأییدیه جایگزینی کامل داده‌ها */
+  const onPickBackupFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // اجازه انتخاب مجدد همان فایل
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        setPendingImport(parsed);
+        setImportOpen(true);
+      } catch {
+        setBackupMsg({ tone: 'danger', text: 'این فایل JSON معتبر نیست — پشتیبان جیبینو را انتخاب کنید.' });
+      }
+    };
+    reader.onerror = () => setBackupMsg({ tone: 'danger', text: 'خواندن فایل ناموفق بود.' });
+    reader.readAsText(file);
+  };
 
   return (
     <div className="space-y-6">
@@ -679,9 +734,48 @@ export function Profile() {
               <div className="flex items-center justify-between rounded-[11px] border border-line bg-white/70 px-3 py-2">
                 <span className="text-[8.5px] font-bold text-ink-2">نسخه اپلیکیشن</span>
                 <span className="num text-[9.5px] font-extrabold text-ink">
-                  ۲.۰ — تحلیل دارایی (PWA)
+                  ۲.۱ — پشتیبان‌گیری و اصلاح قیمت‌ها (PWA)
                 </span>
               </div>
+
+              {/* پشتیبان‌گیری — P0 شماره ۳ */}
+              <div className="rounded-[11px] border border-brand-soft-2 bg-brand-soft/40 p-3">
+                <div className="text-[9.5px] font-extrabold text-brand-2">
+                  پشتیبان‌گیری و انتقال داده
+                </div>
+                <div className="mt-1 text-[8px] font-semibold leading-4 text-ink-3">
+                  چون داده‌ها فقط در همین مرورگر ذخیره می‌شوند، پاک‌شدن داده مرورگر یا تعویض
+                  دستگاه یعنی از دست رفتن تاریخچه مالی. با خروجی گرفتن، فایل پشتیبان را جای
+                  مطمئن نگه دارید و در دستگاه جدید بازیابی کنید.
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <button
+                    className="flex items-center justify-center gap-1.5 rounded-[11px] border border-brand-soft-2 bg-white py-2.5 text-[8.5px] font-bold text-brand-2 transition hover:bg-brand-soft"
+                    onClick={exportBackup}
+                  >
+                    <Download size={12} /> خروجی پشتیبان (JSON)
+                  </button>
+                  <button
+                    className="flex items-center justify-center gap-1.5 rounded-[11px] border border-brand-soft-2 bg-white py-2.5 text-[8.5px] font-bold text-ink-2 transition hover:bg-paper-2 hover:text-brand-2"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Upload size={12} /> بازیابی از فایل
+                  </button>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={onPickBackupFile}
+                />
+                {backupMsg && (
+                  <div className="mt-2">
+                    <Banner tone={backupMsg.tone}>{backupMsg.text}</Banner>
+                  </div>
+                )}
+              </div>
+
               <Link
                 to="/guide"
                 className="flex w-full items-center justify-center gap-1.5 rounded-[11px] border border-brand-soft-2 bg-brand-soft/60 py-2.5 text-[8.5px] font-bold text-brand-2 transition hover:bg-brand-soft"
@@ -771,6 +865,28 @@ export function Profile() {
         onConfirm={() => {
           resetAll();
           setResetOpen(false);
+        }}
+      />
+
+      {/* تأییدیه بازیابی از فایل پشتیبان — جایگزینی کامل داده‌های فعلی */}
+      <ConfirmDialog
+        open={importOpen}
+        title="بازیابی از فایل پشتیبان"
+        message="محتوای فایل پشتیبان جایگزین «همه» داده‌های فعلی این دستگاه می‌شود (تراکنش‌ها، دارایی‌ها، وام‌ها، اهداف و تنظیمات). ادامه می‌دهید؟"
+        confirmLabel="بله، بازیابی شود"
+        onCancel={() => {
+          setImportOpen(false);
+          setPendingImport(null);
+        }}
+        onConfirm={() => {
+          const res = importBackup(pendingImport);
+          setImportOpen(false);
+          setPendingImport(null);
+          setBackupMsg(
+            res.ok
+              ? { tone: 'success', text: 'داده‌ها با موفقیت از فایل پشتیبان بازیابی شد.' }
+              : { tone: 'danger', text: res.error ?? 'بازیابی ناموفق بود.' }
+          );
         }}
       />
     </div>

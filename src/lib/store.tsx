@@ -64,25 +64,36 @@ function loadState(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState;
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    return {
-      settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
-      cash: Number(parsed.cash) || 0,
-      txs: Array.isArray(parsed.txs) ? parsed.txs : [],
-      assets: Array.isArray(parsed.assets) ? parsed.assets : [],
-      loans: Array.isArray(parsed.loans) ? parsed.loans : [],
-      goals: Array.isArray(parsed.goals) ? parsed.goals : [],
-      tests: {
-        finance: parsed.tests?.finance ?? null,
-        personality: parsed.tests?.personality ?? null,
-      },
-    };
+    return sanitizeState(JSON.parse(raw) as Partial<AppState>);
   } catch {
     return defaultState;
   }
 }
 
-interface StoreValue {
+/**
+ * اعتبارسنجی و پاک‌سازی داده‌ی خام (از localStorage یا فایل پشتیبان).
+ * مقادیر ناقص/نامعتبر با مقادیر پیش‌فرض جایگزین می‌شوند تا برنامه هرگز روی داده خراب نشکند.
+ */
+function sanitizeState(parsed: Partial<AppState> | null | undefined): AppState {
+  if (!parsed || typeof parsed !== 'object') {
+    return { ...defaultState, settings: { ...defaultSettings } };
+  }
+  return {
+    settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
+    cash: Number(parsed.cash) || 0,
+    txs: Array.isArray(parsed.txs) ? parsed.txs : [],
+    assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+    loans: Array.isArray(parsed.loans) ? parsed.loans : [],
+    goals: Array.isArray(parsed.goals) ? parsed.goals : [],
+    tests: {
+      finance: parsed.tests?.finance ?? null,
+      personality: parsed.tests?.personality ?? null,
+    },
+  };
+}
+
+/** API عمومی store — برای مصرف در کامپوننت‌ها و تست‌ها */
+export interface StoreValue {
   state: AppState;
   settings: Settings;
   cash: number;
@@ -129,6 +140,11 @@ interface StoreValue {
   deleteGoal: (id: string) => void;
   saveTest: (which: 'finance' | 'personality', result: TestResult) => void;
   resetAll: () => void;
+  /**
+   * بازیابی کامل داده‌ها از فایل پشتیبان (P0 شماره ۳ — جلوگیری از گم شدن داده مالی).
+   * کل وضعیت فعلی را با فایل جایگزین می‌کند؛ خروجی ok/error برای نمایش در UI.
+   */
+  importBackup: (raw: unknown) => { ok: boolean; error?: string };
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -533,6 +549,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState({ ...defaultState, settings: { ...defaultSettings } });
   }, []);
 
+  const importBackup = useCallback((raw: unknown): { ok: boolean; error?: string } => {
+    try {
+      // فایل پشتیبان می‌تواند یا مستقیم AppState باشد یا پوشش‌دار ({ app, version, state })
+      const candidate =
+        raw && typeof raw === 'object' && 'state' in (raw as Record<string, unknown>)
+          ? (raw as { state: unknown }).state
+          : raw;
+      if (!candidate || typeof candidate !== 'object') {
+        return { ok: false, error: 'ساختار فایل پشتیبان معتبر نیست.' };
+      }
+      const c = candidate as Partial<AppState>;
+      const looksValid =
+        Array.isArray(c.txs) || Array.isArray(c.assets) || Array.isArray(c.loans) || Array.isArray(c.goals);
+      if (!looksValid) {
+        return { ok: false, error: 'در فایل پشتیبان هیچ داده مالی (تراکنش/دارایی/وام/هدف) پیدا نشد.' };
+      }
+      setState(sanitizeState(c));
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'خواندن فایل پشتیبان ناموفق بود.' };
+    }
+  }, []);
+
   const value = useMemo<StoreValue>(
     () => ({
       state,
@@ -562,6 +601,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteGoal,
       saveTest,
       resetAll,
+      importBackup,
     }),
     [
       state,
@@ -584,6 +624,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteGoal,
       saveTest,
       resetAll,
+      importBackup,
     ]
   );
 

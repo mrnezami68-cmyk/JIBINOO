@@ -26,7 +26,7 @@ import {
   expenseByCategory,
   valueAssets,
 } from '../lib/analysis';
-import { fmt, compact, pct, freshness, timeLabel, faDigits, jDateLabel } from '../lib/format';
+import { fmt, compact, pct, freshness, timeLabel, faDigits, jDateLabel, monthStart, todayISO } from '../lib/format';
 import { Donut, AreaChart, Progress, Sparkline, Ring } from '../components/charts';
 import { StatCard, SectionHeader, Banner, QuickAddButton } from '../components/ui';
 import { TxModal } from '../components/TxModal';
@@ -37,9 +37,8 @@ export function Dashboard() {
   const [txOpen, setTxOpen] = useState(false);
 
   const nw = useMemo(() => computeNetWorth(store.state, prices), [store.state, prices]);
-  const monthStartISO = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
+  // مرز ماه بر اساس تقویم محلی کاربر — نه UTC (باگ P0 شماره ۱)
+  const monthStartISO = monthStart();
   const month = useMemo(() => summarize(txs, monthStartISO), [txs, monthStartISO]);
   const insights = useMemo(() => buildInsights(store.state, prices), [store.state, prices]);
   const months = useMemo(() => lastMonths(txs, 6), [txs]);
@@ -76,7 +75,7 @@ export function Dashboard() {
                   سلام {firstName} عزیز، خوش آمدید
                 </div>
                 <div className="text-[10.5px] font-medium text-white/55">
-                  {jDateLabel(new Date().toISOString().slice(0, 10))} • وضعیت مالی امروز شما
+                  {jDateLabel(todayISO())} • وضعیت مالی امروز شما
                 </div>
               </div>
             </div>
@@ -358,7 +357,7 @@ export function Dashboard() {
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-brand-soft text-brand">
                 <Gem size={26} />
-              </div>
+                  </div>
               <p className="mt-4 max-w-[300px] text-[11.5px] leading-7 text-ink-3">
                 هنوز دارایی ثبت نکرده‌اید. از بخش «دارایی‌ها» طلا، ارز یا رمزارز خود را اضافه کنید تا
                 ارزش لحظه‌ای آن اینجا نمایش داده شود.

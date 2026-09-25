@@ -8,12 +8,13 @@ import {
   Trash2,
   Wallet,
   Info,
+  Pencil,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { valueAssets, computeNetWorth, investmentByType } from '../lib/analysis';
-import { fmt, compact, pct, freshness, parseAmount } from '../lib/format';
+import { fmt, compact, pct, freshness, parseAmount, todayISO, jDateLabel } from '../lib/format';
 import { priceForAsset } from '../lib/prices';
-import { SectionHeader, Modal, Field, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard } from '../components/ui';
+import { SectionHeader, Modal, Field, ChipSelect, Banner, EmptyState, ConfirmDialog, StatCard, AmountInput } from '../components/ui';
 import { Donut, Progress } from '../components/charts';
 
 const KIND_OPTIONS = [
@@ -86,10 +87,11 @@ const SYMBOL_PRESETS: Record<string, { symbol: string; name: string; unit: strin
 
 export function Assets() {
   const store = useStore();
-  const { assets, prices, addAsset, deleteAsset, sellAsset, refreshPrices, refreshing, cash } = store;
+  const { assets, prices, addAsset, deleteAsset, sellAsset, updateAsset, refreshPrices, refreshing, cash } = store;
   const [addOpen, setAddOpen] = useState(false);
   const [sellId, setSellId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [priceEditId, setPriceEditId] = useState<string | null>(null);
 
   const valued = useMemo(() => valueAssets(assets, prices), [assets, prices]);
   const nw = useMemo(() => computeNetWorth(store.state, prices), [store.state, prices]);
@@ -252,9 +254,22 @@ export function Assets() {
                 <div className="min-w-[150px] flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-[12px] font-extrabold text-ink">{a.name}</span>
-                    {a.live && (
+                    {a.priceBasis === 'live' && (
                       <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[8px] font-bold text-brand-2">
                         قیمت لحظه‌ای
+                      </span>
+                    )}
+                    {a.priceBasis === 'manual' && (
+                      <span
+                        className="rounded-full bg-gold-soft px-2 py-0.5 text-[8px] font-bold text-gold"
+                        title={a.manualPriceAt ? `آخرین به‌روزرسانی: ${jDateLabel(a.manualPriceAt)}` : undefined}
+                      >
+                        قیمت دستی{a.manualPriceAt ? ` (${jDateLabel(a.manualPriceAt, false)})` : ''}
+                      </span>
+                    )}
+                    {a.priceBasis === 'cost' && (
+                      <span className="rounded-full bg-paper-2 px-2 py-0.5 text-[8px] font-bold text-ink-3">
+                        بر مبنای قیمت خرید
                       </span>
                     )}
                   </div>
@@ -274,7 +289,7 @@ export function Assets() {
                   <div>
                     <div className="text-[8.5px] font-bold text-ink-3">قیمت فعلی هر واحد</div>
                     <div className="num text-[11px] font-extrabold text-ink">
-                      {a.livePrice ? fmt(Math.round(a.livePrice)) : fmt(a.avgBuy)}
+                      {fmt(Math.round(a.unitPrice))}
                     </div>
                   </div>
                   <div>
@@ -295,6 +310,13 @@ export function Assets() {
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    <button
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white text-ink-2 transition hover:border-gold hover:text-gold"
+                      onClick={() => setPriceEditId(a.id)}
+                      title="به‌روزرسانی قیمت این دارایی"
+                    >
+                      <Pencil size={13} />
+                    </button>
                     <button
                       className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white text-ink-2 transition hover:border-brand-3 hover:text-brand-2"
                       onClick={() => setSellId(a.id)}
@@ -337,6 +359,17 @@ export function Assets() {
           setSellId(null);
         }}
       />
+      {/* فاز ۱۳: به‌روزرسانی قیمت دستی دارایی (ملک، خودرو، فلزات بدون قیمت روز و…) */}
+      {priceEditId && (
+        <PriceEditModal
+          assetId={priceEditId}
+          onClose={() => setPriceEditId(null)}
+          onSave={(patch) => {
+            updateAsset(priceEditId, patch);
+            setPriceEditId(null);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={!!deleteId}
         title="حذف دارایی"
@@ -610,6 +643,133 @@ function SellModal({
           </Field>
         </div>
       )}
+    </Modal>
+  );
+}
+
+/* ----------------- قیمت دستی دارایی (فاز ۱۳) ----------------- */
+
+function PriceEditModal({
+  assetId,
+  onClose,
+  onSave,
+}: {
+  assetId: string;
+  onClose: () => void;
+  onSave: (patch: { manualPrice: number | null; manualPriceAt?: string; useManualPrice: boolean }) => void;
+}) {
+  const { assets, prices } = useStore();
+  const asset = assets.find((a) => a.id === assetId);
+  const live = asset ? priceForAsset(prices, asset.kind, asset.symbol) : { toman: null };
+  const hasLive = live.toman !== null && live.toman > 0;
+
+  const [price, setPrice] = useState(String(Math.round(asset?.manualPrice ?? live.toman ?? asset?.avgBuy ?? 0)));
+  const [mode, setMode] = useState<'market' | 'manual'>(
+    asset?.useManualPrice || !hasLive ? 'manual' : 'market'
+  );
+  const [error, setError] = useState('');
+
+  if (!asset) return null;
+
+  const submit = () => {
+    const v = parseAmount(price);
+    if (mode === 'manual' && v <= 0) {
+      setError('قیمت هر واحد را وارد کنید.');
+      return;
+    }
+    onSave({
+      manualPrice: mode === 'manual' ? v : parseAmount(price) || null,
+      manualPriceAt: todayISO(),
+      useManualPrice: mode === 'manual',
+    });
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`به‌روزرسانی قیمت «${asset.name}»`}
+      subtitle="برای دارایی‌هایی مثل ملک، خودرو، زمین یا فلزاتی که قیمت روزشان همیشه در دسترس نیست، قیمت را دستی وارد کنید تا ارزش روز دارایی و ارزش خالص شما به‌روز بماند."
+      size="sm"
+      footer={
+        <div className="flex gap-3">
+          <button className="btn btn-primary flex-1 !py-3.5" onClick={submit}>
+            ذخیره قیمت
+          </button>
+          <button className="btn btn-ghost flex-1 !py-3.5" onClick={onClose}>
+            انصراف
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-[15px] border border-line bg-paper/50 p-4 text-[10.5px] font-semibold leading-6 text-ink-2">
+          موجودی: <span className="num font-extrabold">{fmt(asset.quantity)}</span> {asset.unit} •
+          قیمت تمام‌شده خرید: <span className="num font-extrabold">{fmt(asset.avgBuy)}</span> تومان
+          {hasLive && (
+            <>
+              {' '}• قیمت لحظه‌ای:{' '}
+              <span className="num font-extrabold">{fmt(Math.round(live.toman ?? 0))}</span> تومان
+            </>
+          )}
+        </div>
+
+        {hasLive ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('market')}
+              className={`rounded-[15px] border-[1.5px] p-3 text-right transition-all ${
+                mode === 'market' ? 'border-brand-2 bg-brand-soft' : 'border-line bg-white hover:border-line-2'
+              }`}
+            >
+              <div className="text-[11px] font-bold text-ink">قیمت لحظه‌ای بازار</div>
+              <div className="mt-0.5 text-[8.5px] font-semibold leading-4 text-ink-3">
+                ارزش‌گذاری خودکار از منابع آنلاین
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className={`rounded-[15px] border-[1.5px] p-3 text-right transition-all ${
+                mode === 'manual' ? 'border-brand-2 bg-brand-soft' : 'border-line bg-white hover:border-line-2'
+              }`}
+            >
+              <div className="text-[11px] font-bold text-ink">قیمت دستی (ثابت)</div>
+              <div className="mt-0.5 text-[8.5px] font-semibold leading-4 text-ink-3">
+                قیمت واردشده شما ملاک ارزش‌گذاری است
+              </div>
+            </button>
+          </div>
+        ) : (
+          <Banner tone="info">
+            این دارایی قیمت لحظه‌ای ندارد (مثل ملک، خودرو یا فلزات خاص). قیمت دستی وارد‌شده ملاک
+            محاسبه ارزش روز این دارایی در داشبورد و گزارش‌ها خواهد بود.
+          </Banner>
+        )}
+
+        <Field label="قیمت هر واحد" hint="تومان">
+          <AmountInput
+            value={price}
+            onChange={(v) => {
+              setPrice(v);
+              setError('');
+            }}
+            placeholder={String(Math.round(live.toman ?? asset.avgBuy))}
+          />
+        </Field>
+
+        {mode === 'manual' && parseAmount(price) > 0 && (
+          <div className="rounded-[13px] border border-brand-soft-2 bg-brand-soft/40 px-4 py-3 text-[10px] font-semibold leading-5 text-ink-2">
+            ارزش جدید این دارایی:{' '}
+            <span className="num font-extrabold text-brand-2">
+              {fmt(Math.round(parseAmount(price) * asset.quantity))}
+            </span>{' '}
+            تومان
+          </div>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+      </div>
     </Modal>
   );
 }

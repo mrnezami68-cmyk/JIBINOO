@@ -1,73 +1,44 @@
-# React + TypeScript + Vite
+# 🟢 جیبینو (JIBINOO) — حسابدار شخصی هوشمند
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+حسابدار شخصی فارسی‌زبان به‌صورت **PWA** برای مدیریت نقد، دارایی، وام، اهداف مالی و تحلیل رفتار مالی — با قیمت‌گذاری لحظه‌ای چندمنبعه (طلایار/TGJU، بیت‌پین، CoinGecko، Gold-API، COMEX، er-api).
 
-Currently, two official plugins are available:
+> 🔒 همه داده‌های شما فقط روی **همین دستگاه** (localStorage مرورگر) ذخیره می‌شود و به هیچ سروری ارسال نمی‌شود. از بخش پروفایل می‌توانید **پشتیبان JSON** بگیرید و در دستگاه دیگر بازیابی کنید.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ امکانات
 
-## React Compiler
+- **داشبورد ارزش خالص**: نقد + دارایی + اهداف − بدهی، با اینسایت‌های هوشمند فارسی
+- **تراکنش‌های اتمیک**: درآمد (ثابت/متغیر)، هزینه، سرمایه‌گذاری، انتقال به هدف، پرداخت قسط — ثبت و حذف هر تراکنش دقیقاً آینه یکدیگر است (`cashDelta` + `TxLink`)
+- **دارایی‌ها**: طلا/سکه/آب‌شده، ارز، رمزارز (۱۲)، فلزات (نقره/پلاتین/مس)، ملک/خودرو — با قیمت لحظه‌ای یا **قیمت دستی قابل به‌روزرسانی**
+- **موتور قیمت چندمنبعه**: زنجیره fallback «دستی ← مستقیم ← مشتق ← کش ← آفلاین» + نرمال‌سازی خودکار ریال/تومان (`fixUnit`)
+- **وام‌ها**: تفکیک «وام قدیمی (فقط پیگیری)» از «وام جدید (واریز به نقد)»، اقساط اتمیک
+- **اهداف مالی**: انتقال واریز/برداشت با سند دفتر
+- **تحلیل**: امتیاز سلامت مالی (۶ سنجه وزنی)، سلامت سرمایه‌گذاری، ترکیب سبد، گزارش‌های ماهانه
+- **تست‌های روانشناسی مالی و شخصیت** (Big Five)
+- **PWA**: نصب روی دستگاه، کار آفلاین، قفل PIN
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🛠 فناوری
 
-## Expanding the ESLint configuration
+React 19 · TypeScript · Vite 7 · Tailwind CSS 4 · framer-motion · Vitest + React Testing Library
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 اجرا
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci          # نصب وابستگی‌ها
+npm run dev     # حالت توسعه
+npm test        # تست‌های اجرایی (۴۱ تست — منطقه زمانی: تهران)
+npm run build   # بیلد تولیدی
+npm run lint    # بررسی کیفیت کد
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📚 مستندات
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- [`CHANGELOG.md`](./CHANGELOG.md) — تاریخچه کامل فاز‌به‌فاز (چه/چرا/چگونه + خطاها و اصلاحات)
+- [`docs/PRICE_ENGINE.md`](./docs/PRICE_ENGINE.md) — معماری موتور قیمت، منابع، فرمول‌های مشتق و نرمال‌سازی واحدها
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🧪 کیفیت
+
+`tsc` سبز · ۴۱ تست اجرایی (رگرسیون ۸ باگ یکپارچگی مالی + باگ‌های منطقه زمانی و واحد پول) · بیلد موفق
+
+---
+
+ساخته‌شده با ❤️ برای بازار ایران — واحد پول: تومان · تقویم: جلالی · RTL کامل

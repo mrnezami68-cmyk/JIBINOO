@@ -20,4 +20,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // فایل‌های تست: الگوی «state sink» برای خواندن خروجی hook خارج از کامپوننت مجاز است
+    files: ['src/**/*.test.{ts,tsx}'],
+    rules: {
+      'react-hooks/globals': 'off',
+    },
+  },
 ])

@@ -265,7 +265,9 @@ function AddLoanModal({
   const [installment, setInstallment] = useState('');
   const [count, setCount] = useState('');
   const [dueDay, setDueDay] = useState('1');
-  const [receiveCash, setReceiveCash] = useState(true);
+  // فاز ۱۳: وام «قدیمی» (بازچینی اطلاعات قبلی — پولش خرج شده) پیش‌فرض است تا
+  // موجودی نقد به‌اشتباه باد نکند؛ فقط وام «جدید» به نقد واریز می‌شود.
+  const [loanStatus, setLoanStatus] = useState<'old' | 'new'>('old');
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
@@ -294,8 +296,9 @@ function AddLoanModal({
         installmentsTotal: c,
         dueDay: Math.min(31, Math.max(1, d)),
       },
-      // باگ شماره ۶: دریافت نقدی اصل وام + سند «دریافت وام» در دفتر
-      { receiveCash }
+      // باگ شماره ۶: دریافت نقدی اصل وام + سند «دریافت وام» در دفتر —
+      // فقط وقتی کاربر صراحتاً «وام جدید» را انتخاب کرده باشد
+      { receiveCash: loanStatus === 'new' }
     );
     setTitle('');
     setLender('');
@@ -303,6 +306,7 @@ function AddLoanModal({
     setInstallment('');
     setCount('');
     setDueDay('1');
+    setLoanStatus('old');
     setError('');
     onClose();
   };
@@ -373,23 +377,44 @@ function AddLoanModal({
             />
           </Field>
         </div>
-        <label className="flex cursor-pointer items-start gap-3 rounded-[15px] border border-line bg-paper/50 p-4">
-          <input
-            type="checkbox"
-            checked={receiveCash}
-            onChange={(e) => setReceiveCash(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-[#0e5744]"
-          />
-          <div>
-            <div className="text-[11px] font-bold text-ink-2">
-              مبلغ وام به موجودی نقد واریز شود
-            </div>
-            <div className="mt-1 text-[9.5px] font-medium leading-5 text-ink-3">
-              موجودی نقد فعلی: {fmt(cash)} تومان — سند «دریافت وام» در دفتر تراکنش‌ها ثبت
-              می‌شود تا ارزش خالص دارایی درست بماند.
-            </div>
+        {/* فاز ۱۳: انتخاب وضعیت وام — قدیمی (پیش‌فرض) یا جدید */}
+        <div>
+          <div className="mb-2 text-[12px] font-bold text-ink-2">وضعیت این وام</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setLoanStatus('old')}
+              className={`rounded-[15px] border-[1.5px] p-3 text-right transition-all ${
+                loanStatus === 'old'
+                  ? 'border-brand-2 bg-brand-soft'
+                  : 'border-line bg-white hover:border-line-2'
+              }`}
+            >
+              <div className="text-[11px] font-bold text-ink">وام قدیمی — فقط پیگیری</div>
+              <div className="mt-0.5 text-[8.5px] font-semibold leading-4 text-ink-3">
+                پول این وام قبلاً دریافت و خرج شده است؛ ثبت آن موجودی نقد را تغییر نمی‌دهد
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoanStatus('new')}
+              className={`rounded-[15px] border-[1.5px] p-3 text-right transition-all ${
+                loanStatus === 'new'
+                  ? 'border-brand-2 bg-brand-soft'
+                  : 'border-line bg-white hover:border-line-2'
+              }`}
+            >
+              <div className="text-[11px] font-bold text-ink">وام جدید — تازه دریافت کرده‌ام</div>
+              <div className="mt-0.5 text-[8.5px] font-semibold leading-4 text-ink-3">
+                اصل مبلغ به موجودی نقد اضافه و سند «دریافت وام» ثبت می‌شود
+              </div>
+            </button>
           </div>
-        </label>
+          <div className="mt-2 text-[9px] font-semibold leading-5 text-ink-3">
+            موجودی نقد فعلی: {fmt(cash)} تومان — اگر وامی را که ماه‌ها پیش گرفته‌اید و در حال
+            پرداخت اقساطش هستید ثبت می‌کنید، گزینه «قدیمی» را بگذارید.
+          </div>
+        </div>
         {(parseAmount(total) > 0 || parseAmount(count) > 0) && (
           <div className="flex items-center justify-between rounded-[14px] border border-brand-soft-2 bg-brand-soft/50 px-4 py-3">
             <div className="flex items-center gap-2 text-[10px] font-bold text-brand-2">

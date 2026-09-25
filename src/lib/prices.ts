@@ -194,6 +194,21 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * لایه محافظ واحد ریال/تومان (فاز ۱۳):
+ * قیمت منبع را با یک مرجع مستقل (مثلاً اونس جهانی × نرخ دلار یا نرخ تتر بیت‌پین)
+ * مقایسه می‌کند؛ اگر حدوداً ۱۰ برابر ناسازگار بود واحد را اصلاح می‌کند.
+ * آستانه ۵ برابر است تا نوسان عادی بازار (حتی ۵۰٪) هرگز تداخل ایجاد نکند.
+ */
+export function fixUnit(raw: number, expected: number): number {
+  if (!Number.isFinite(raw) || raw <= 0 || !Number.isFinite(expected) || expected <= 0) {
+    return raw;
+  }
+  if (raw > expected * 5) return raw / 10; // منبع ریالی است → تومان
+  if (raw < expected / 5) return raw * 10; // منبع از قبل تومانی است (آینده‌نگرانه)
+  return raw;
+}
+
 /** Deterministic decorative sparkline seeded from the 24h change. */
 function makeSpark(change: number, seed: number, points = 24): number[] {
   const out: number[] = [];
@@ -210,9 +225,13 @@ function makeSpark(change: number, seed: number, points = 24): number[] {
 
 /* ---------------------------- source: TGJU ------------------------- *
  * دروازه استاتیک «طلایار» (JSON عمومی روی GitHub Pages از داده TGJU).
- * نرمال‌سازی واحدها (کشف‌شده با تطبیق داخلی — CHANGELOG فاز ۸):
- *   ریالی: ارزها، سکه‌ها، مثقال، اونس ← تقسیم بر ۱۰ = تومان
- *   تومانی: طلای ۱۸ و ۲۴ عیار (گرم)
+ * ⚠️ کشف مهم (فاز ۱۳): برچسب «currency: TOMAN» فید معتبر نیست — بررسی داده زنده
+ * نشان داد «تمام» ردیف‌های TGJU (از جمله طلای گرمی ۱۸ و ۲۴ عیار) عملاً به ریال‌اند.
+ * مثال تأییدشده: GOLD_18K = ۲۴۱٬۲۴۶٬۰۰۰ ریال = ۲۴٬۱۲۴٬۶۰۰ تومان در حالی که فید
+ * آن را TOMAN معرفی می‌کرد و اپ ۱۰ برابر خطا نشان می‌داد.
+ * همه ردیف‌ها ÷ ۱۰ می‌شوند + لایه محافظ fixUnit (تطبیق با مرجع مستقل) روی
+ * دلار، طلای ۱۸/۲۴ و مثقال اعمال می‌شود تا اگر فید روزی واحد را عوض کند،
+ * قیمت‌ها خودکار درست بمانند.
  * ------------------------------------------------------------------ */
 
 const GATEWAY_BASE = 'https://javadisaloo1111.github.io/Currency-App/api/v1/market';
@@ -221,6 +240,7 @@ const GATEWAY_RIAL = new Set([
   'USD', 'EUR', 'GBP', 'AED', 'TRY', 'CNY', 'CHF', 'USDT', 'BTC',
   'COIN_EMAMI', 'COIN_BAHAR', 'COIN_NIM', 'COIN_ROB', 'COIN_GERAMI',
   'GOLD_MESGHAL', 'GOLD_OUNCE_TM',
+  'GOLD_18K', 'GOLD_24K', // ← فاز ۱۳: برچسب فید TOMAN است ولی مقدار ریالی است
 ]);
 
 interface GatewayRow {
@@ -293,6 +313,8 @@ interface CoinGeckoData {
   usd: Record<string, number>;
   change: Record<string, number>;
   goldOz: number | null;
+  /** تغییر ۲۴ ساعته اونس طلا (PAXG) — fallback تغییر طلای ۱۸ وقتی دروازه خراب است */
+  goldOzChange: number | null;
 }
 
 async function fetchCoinGecko(): Promise<CoinGeckoData> {
@@ -309,8 +331,14 @@ async function fetchCoinGecko(): Promise<CoinGeckoData> {
     if (Number.isFinite(c)) change[row.id] = c;
   }
   const goldOz = num(json?.['pax-gold']?.usd);
+  const goldOzChange = Number(json?.['pax-gold']?.usd_24h_change);
   if (!Object.keys(usd).length && goldOz === null) throw new Error('empty coingecko');
-  return { usd, change, goldOz };
+  return {
+    usd,
+    change,
+    goldOz,
+    goldOzChange: Number.isFinite(goldOzChange) ? goldOzChange : null,
+  };
 }
 
 /* --------------------------- source: Gold-API ---------------------- */
@@ -417,8 +445,12 @@ export async function fetchLivePrices(
   const cachedItem = (id: string) => cache?.items[id] ?? null;
 
   /* ---------- نرخ دلار (بازار) ---------- */
-  const usdGateway = gwOk ? gatewayToman(gw.rows, 'USD') : null;
   const usdtPair = bpOk ? bitpinToman(bp, 'USDT_IRT') : null; // مشتق: تتر ≈ دلار بازار
+  // تطبیق واحد با مرجع مستقل (تتر بیت‌پین یا نرخ رسمی) — فاز ۱۳
+  const usdGatewayRaw = gwOk ? gatewayToman(gw.rows, 'USD') : null;
+  const usdAnchor = usdtPair?.price ?? (erOk ? (erapi as number) : 0);
+  const usdGateway =
+    usdGatewayRaw !== null && usdAnchor > 0 ? fixUnit(usdGatewayRaw, usdAnchor) : usdGatewayRaw;
   const usdCandidates: { value: number; source: PriceSource; detail: string }[] = [];
   if (usdGateway !== null) usdCandidates.push({ value: usdGateway, source: 'tgju', detail: `TGJU ${Math.round(usdGateway)}` });
   if (usdtPair) usdCandidates.push({ value: usdtPair.price, source: 'bitpin', detail: `مشتق از تتر ${Math.round(usdtPair.price)}` });
@@ -446,8 +478,11 @@ export async function fetchLivePrices(
           : FALLBACK.goldUsdOz;
 
   /* ---------- طلای ۱۸ عیار (گرم) ---------- */
-  const gold18Gateway = gwOk ? gatewayToman(gw.rows, 'GOLD_18K') : null;
+  const gold18GatewayRaw = gwOk ? gatewayToman(gw.rows, 'GOLD_18K') : null;
   const gold18Derived = (goldOzUsd / 31.1035) * 0.75 * usdToman;
+  // فاز ۱۳: تطبیق واحد طلای ۱۸ با مرجع مستقل (اونس جهانی × نرخ دلار)
+  const gold18Gateway =
+    gold18GatewayRaw !== null && gold18Derived > 0 ? fixUnit(gold18GatewayRaw, gold18Derived) : gold18GatewayRaw;
   const gold18Pick =
     manualGold18 && manualGold18 > 0
       ? { value: manualGold18 as number, source: 'manual' as PriceSource }
@@ -504,7 +539,12 @@ export async function fetchLivePrices(
   }
 
   // طلا و آب‌شده
-  const gold24Gateway = gwOk ? gatewayToman(gw.rows, 'GOLD_24K') : null;
+  const gold24GatewayRaw = gwOk ? gatewayToman(gw.rows, 'GOLD_24K') : null;
+  // فاز ۱۳: تطبیق واحد طلای ۲۴ با طلای ۱۸ (نسبت ثابت ۲۴/۱۸)
+  const gold24Gateway =
+    gold24GatewayRaw !== null && gold18Toman > 0
+      ? fixUnit(gold24GatewayRaw, gold18Toman * (24 / 18))
+      : gold24GatewayRaw;
   const gold18Change =
     (gwOk ? Number(gw.rows.get('GOLD_18K')?.change_percent) : NaN) ||
     (cgOk ? cg.change['pax-gold'] ?? 0 : 0);
@@ -519,7 +559,12 @@ export async function fetchLivePrices(
     gwOk ? Number(gw.rows.get('GOLD_24K')?.change_percent) || 0 : 0,
     gold24Gateway !== null ? 'tgju' : 'derived'
   );
-  const mesghal = gwOk ? gatewayToman(gw.rows, 'GOLD_MESGHAL') : null;
+  const mesghalRaw = gwOk ? gatewayToman(gw.rows, 'GOLD_MESGHAL') : null;
+  // فاز ۱۳: تطبیق واحد مثقال با مقدار مشتق از طلای ۱۸
+  const mesghal =
+    mesghalRaw !== null && gold18Toman > 0
+      ? fixUnit(mesghalRaw, gold18Toman * 4.608 * (705 / 750))
+      : mesghalRaw;
   put(
     'abshode', 'طلای آب‌شده', 'ABSHODE', 'مثقال',
     mesghal ?? gold18Toman * 4.608 * (705 / 750),
@@ -678,3 +723,4 @@ export function priceForAsset(
   }
   return { toman: null, source: 'manual' };
 }
+
