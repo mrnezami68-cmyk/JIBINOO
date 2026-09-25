@@ -48,7 +48,7 @@ export function Dashboard() {
 
   const firstName = settings.name?.trim() ? settings.name.trim().split(' ')[0] : 'دوست جیبینو';
 
-  const priceCards = ['usd', 'gold18', 'bitcoin', 'ethereum', 'tether']
+  const priceCards = ['usd', 'gold18', 'abshode', 'coin_emami', 'bitcoin']
     .map((k) => prices.items[k])
     .filter(Boolean);
 

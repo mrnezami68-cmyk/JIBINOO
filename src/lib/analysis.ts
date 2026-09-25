@@ -74,7 +74,8 @@ export function computeNetWorth(state: AppState, prices: PriceState): NetWorth {
     pnlPct: investedCost > 0 ? (investments - investedCost) / investedCost : 0,
     byClass: [
       { key: 'cash', label: 'نقد', value: state.cash, color: '#2f9c78' },
-      { key: 'gold', label: 'طلا', value: classValue('gold'), color: '#c08d2c' },
+      { key: 'gold', label: 'طلا و سکه', value: classValue('gold'), color: '#c08d2c' },
+      { key: 'metal', label: 'فلزات', value: classValue('metal'), color: '#6f8390' },
       { key: 'currency', label: 'ارز', value: classValue('currency'), color: '#4a86b4' },
       { key: 'crypto', label: 'رمزارز', value: classValue('crypto'), color: '#7161c4' },
       { key: 'other', label: 'سایر', value: classValue('other'), color: '#9a8fb8' },
@@ -242,6 +243,7 @@ export function investmentByType(assets: Asset[], prices: PriceState): CategoryS
   const map = new Map<string, { label: string; value: number; color: string }>();
   const meta: Record<string, { label: string; color: string }> = {
     gold: { label: 'طلا و سکه', color: '#c08d2c' },
+    metal: { label: 'فلزات (نقره/مس/پلاتین)', color: '#6f8390' },
     currency: { label: 'ارز', color: '#4a86b4' },
     crypto: { label: 'رمزارز', color: '#7161c4' },
     other: { label: 'سایر دارایی‌ها', color: '#9a8fb8' },

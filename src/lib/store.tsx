@@ -138,6 +138,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [prices, setPrices] = useState<PriceState>(() => initialPrices());
   const [refreshing, setRefreshing] = useState(false);
   const loadedOnce = useRef(false);
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
+  const pricesRef = useRef(prices);
 
   // persist
   useEffect(() => {
@@ -161,13 +163,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.settings.manualUsd, state.settings.manualGold18]);
 
-  // auto-load prices on first mount
+  // نگه‌داشتن آخرین تابع/مقادیر در ref — فقط داخل effect (نه render)
+  useEffect(() => {
+    refreshRef.current = refreshPrices;
+    pricesRef.current = prices;
+  });
+
+  // بارگذاری اولیه + به‌روزرسانی خودکار قیمت‌ها (هر ۵ دقیقه و هنگام بازگشت به تب).
+  // با ref نگه داشته می‌شود تا تایمر به نرخ‌های دستی تازه دسترسی داشته باشد (رفع باگ closure کهنه).
   useEffect(() => {
     if (!loadedOnce.current) {
       loadedOnce.current = true;
-      void refreshPrices();
+      void refreshRef.current?.();
     }
-  }, [refreshPrices]);
+    const timer = window.setInterval(() => void refreshRef.current?.(), 5 * 60 * 1000);
+    const onVisible = () => {
+      const last = pricesRef.current.updatedAt;
+      if (document.visibilityState === 'visible' && (!last || Date.now() - last > 60_000)) {
+        void refreshRef.current?.();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setState((s) => ({ ...s, settings: { ...s.settings, ...patch } }));

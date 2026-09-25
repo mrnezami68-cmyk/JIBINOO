@@ -50,7 +50,7 @@ export type TxLink =
       assetSnapshot: AssetSnapshot;
     };
 
-export type AssetKind = 'gold' | 'currency' | 'crypto' | 'other';
+export type AssetKind = 'gold' | 'currency' | 'crypto' | 'metal' | 'other';
 
 export interface Asset {
   id: string;
@@ -138,17 +138,39 @@ export interface TestsState {
 
 /* ---------------------------- live prices --------------------------- */
 
-export type PriceSource = 'coingecko' | 'live-rate' | 'manual' | 'fallback';
+export type PriceSource =
+  | 'tgju'
+  | 'bitpin'
+  | 'coingecko'
+  | 'metals'
+  | 'yahoo'
+  | 'erapi'
+  | 'live-rate'
+  | 'derived'
+  | 'manual'
+  | 'cache'
+  | 'fallback';
 
 export interface LivePrice {
   id: string;
   label: string;
   symbol: string;
+  /** واحد قیمت‌گذاری، مثلاً «گرم»، «مثقال»، «عدد»، «کیلوگرم» */
+  unit: string;
   usd: number | null;
   toman: number | null;
   change24h: number | null;
   source: PriceSource;
   spark: number[];
+}
+
+/** وضعیت سلامت هر منبع قیمت برای نمایش شفاف در UI */
+export interface SourceHealth {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail?: string;
+  at?: number;
 }
 
 export interface PriceState {
@@ -162,6 +184,7 @@ export interface PriceState {
   gold18Toman: number;
   gold18Source: PriceSource;
   items: Record<string, LivePrice>;
+  sources: SourceHealth[];
 }
 
 export interface AppState {
